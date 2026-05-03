@@ -36,4 +36,18 @@ describe('boundary classifier', () => {
       expect(filePath).not.toContain('node_modules');
     }
   });
+
+  it('classifies every non-declaration source file', () => {
+    const expected = ['app/page.tsx', 'components/counter.tsx', 'components/util.ts'];
+    for (const rel of expected) {
+      expect(boundaries.has(path.join(FIXTURE_ROOT, rel))).toBe(true);
+    }
+  });
+
+  it('only emits the three valid boundary values', () => {
+    const valid = new Set(['server', 'client', 'either']);
+    for (const v of boundaries.values()) {
+      expect(valid.has(v)).toBe(true);
+    }
+  });
 });
