@@ -1,5 +1,5 @@
-import ts from 'typescript';
 import { hasDirective } from '../utils/ast.js';
+import type * as ts from 'typescript';
 import type { FileBoundary } from '../rules/types.js';
 import type { ModuleGraph } from './module-graph.js';
 
