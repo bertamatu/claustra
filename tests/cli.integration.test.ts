@@ -38,17 +38,26 @@ describe('claustra CLI (integration)', () => {
     expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it('scans the fixture and exits 0 with no findings (no rules registered yet)', () => {
+  it('scans the fixture, surfaces real findings, and exits 1 (default severity threshold)', () => {
     const { stdout, status } = runCli(FIXTURE, '--no-llm');
-    expect(status).toBe(0);
-    expect(stdout).toContain('0 findings');
+    expect(status).toBe(1);
+    expect(stdout.toLowerCase()).toContain('issue');
+    expect(stdout).toContain('a02-rsc-pattern-misuse'.toUpperCase());
   });
 
   it('emits valid JSON when --reporter=json is used', () => {
     const { stdout, status } = runCli(FIXTURE, '--no-llm', '--reporter', 'json');
-    expect(status).toBe(0);
-    const parsed = JSON.parse(stdout) as { findings: unknown[] };
+    // Status is 1 because the fixture contains real high-severity findings — that's the point.
+    expect(status).toBe(1);
+    const parsed = JSON.parse(stdout) as { findings: { ruleId: string }[] };
     expect(Array.isArray(parsed.findings)).toBe(true);
+    expect(parsed.findings.length).toBeGreaterThan(0);
+    expect(parsed.findings.some((f) => f.ruleId === 'a02-rsc-pattern-misuse')).toBe(true);
+  });
+
+  it('exits 0 when --severity=critical because no findings reach that bar', () => {
+    const { status } = runCli(FIXTURE, '--no-llm', '--severity', 'critical');
+    expect(status).toBe(0);
   });
 
   it('exits with code 2 when given a nonexistent path (no tsconfig)', () => {
