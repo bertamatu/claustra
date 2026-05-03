@@ -33,7 +33,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc -p tsconfig.eslint.json --noEmit",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
     "prepublishOnly": "pnpm build"
   },
   "publishConfig": {
@@ -50,10 +53,13 @@
     "@anthropic-ai/sdk": "^0.55.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^10.3.0",
     "tsup": "^8.0.0",
     "tsx": "^4.19.0",
+    "typescript-eslint": "^8.59.1",
     "vitest": "^3.0.0"
   }
 }

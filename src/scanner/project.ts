@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 export const findTsConfig = (startDir: string): string => {
   let dir = path.resolve(startDir);
-  while (true) {
+  for (;;) {
     const candidate = path.join(dir, 'tsconfig.json');
     if (existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
@@ -23,7 +23,7 @@ export const findNextVersion = (rootDir: string): string => {
 export const buildProgram = (
   tsConfigPath: string,
 ): { program: ts.Program; checker: ts.TypeChecker } => {
-  const configFile = ts.readConfigFile(tsConfigPath, ts.sys.readFile);
+  const configFile = ts.readConfigFile(tsConfigPath, (p) => ts.sys.readFile(p));
   if (configFile.error) {
     throw new Error(ts.formatDiagnostic(configFile.error, ts.createCompilerHost({})));
   }

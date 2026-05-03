@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const ORIGINAL_KEY = process.env['ANTHROPIC_API_KEY'];
 
 describe('getLlmClient', () => {
   beforeEach(() => {
+    vi.resetModules();
     delete process.env['ANTHROPIC_API_KEY'];
   });
 
@@ -13,13 +14,13 @@ describe('getLlmClient', () => {
   });
 
   it('returns undefined when ANTHROPIC_API_KEY is not set', async () => {
-    const { getLlmClient } = await import('../../src/llm/client.js?nokey');
+    const { getLlmClient } = await import('../../src/llm/client.js');
     expect(await getLlmClient()).toBeUndefined();
   });
 
   it('returns a client instance when ANTHROPIC_API_KEY is set', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test-fake-key';
-    const { getLlmClient } = await import('../../src/llm/client.js?withkey');
+    const { getLlmClient } = await import('../../src/llm/client.js');
     const client = await getLlmClient();
     expect(client).toBeDefined();
     expect(client?.messages).toBeDefined();
@@ -27,7 +28,7 @@ describe('getLlmClient', () => {
 
   it('returns the cached client on repeat calls', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test-fake-key';
-    const { getLlmClient } = await import('../../src/llm/client.js?cachecheck');
+    const { getLlmClient } = await import('../../src/llm/client.js');
     const a = await getLlmClient();
     const b = await getLlmClient();
     expect(a).toBe(b);
