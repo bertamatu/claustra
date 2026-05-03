@@ -95,6 +95,19 @@ describe('d01 — hydration mismatch risks', () => {
     expect(findFor('components/correct-explicit-locale.tsx')).toHaveLength(0);
   });
 
+  it('does NOT flag Next.js metadata files (sitemap.ts / robots.ts) — they run server-side and never hydrate', () => {
+    expect(findFor('app/sitemap.ts')).toHaveLength(0);
+    expect(findFor('app/robots.ts')).toHaveLength(0);
+  });
+
+  it('does NOT flag browser-global reads after a `typeof window === "undefined"` early-return guard', () => {
+    const f = findFor('components/correct-typeof-guard.tsx');
+    // Three guarded functions × multiple reads each must all be skipped.
+    // Only the unguarded `noGuard` should fire.
+    expect(f).toHaveLength(1);
+    expect(f[0]?.message).toContain('document');
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('emits at least 5 distinct violation findings', () => {
