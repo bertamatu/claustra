@@ -1,0 +1,13 @@
+{
+  "name": "claustra",
+  "version": "0.0.1",
+  "description": "Coming soon: a Next.js App Router boundary auditor.",
+  "license": "MIT",
+  "author": "Your Name berta.codes@gmail.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bertamatu/claustra.git"
+  },
+  "keywords": ["nextjs", "rsc", "lint", "audit", "server-components"],
+  "main": "index.js"
+}
