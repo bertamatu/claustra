@@ -10,6 +10,10 @@ All notable changes to claustra are documented here. Format follows [Keep a Chan
 - **D1 (hydration risks) skips Next.js metadata-convention files.** `sitemap.ts`, `robots.ts`, `manifest.ts`, `opengraph-image.{ts,tsx}`, `twitter-image.{ts,tsx}`, `icon.{ts,tsx}`, `apple-icon.{ts,tsx}`, and `favicon.{ts,tsx}` run server-side at build/request time and never hydrate, so render-scope hydration patterns inside them are not actually hydration risks. Surfaced from real-world testing — claustra was emitting up to 7 false positives per `sitemap.ts`.
 - **D1 recognizes `typeof window === 'undefined'` early-return guards.** Browser-global reads inside a function whose earlier statements include `if (typeof window === 'undefined') return;` (or `throw`, or with `document`/`navigator`/`localStorage`/`sessionStorage`) are now treated as gated to client-side execution. Cleared a class of false positives in utility modules that intentionally guard before reading globals.
 
+### Cleaned up
+
+- **Test-fixture `package.json` manifests no longer declare fake `next`/`react` dependencies.** Those declarations were purely cosmetic — the fixtures don't run `npm install`, there's no `node_modules` in any fixture, and claustra reads the *scanned* project's `node_modules/next/package.json` for version detection rather than the fixture's manifest. The fake deps were tripping repo-level supply-chain scanners (Socket et al.) into reporting fictitious Next.js CVEs against the claustra repo. The published npm tarball was unaffected (fixtures are excluded by the `files` field), but the noise on the GitHub side is now gone.
+
 ### Validation
 
 Re-running v1.0.1 against a real Next.js App Router site dropped findings from 27 to 13 — every remaining finding is a real bug or worth a manual look. The 14 cleared findings were exactly the three false-positive classes above.
