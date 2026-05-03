@@ -256,6 +256,10 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   for (const sourceFile of ctx.program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
+    // Source files that are themselves Client Components don't cross the boundary
+    // when they render other Client Components — both sides run in the browser, so
+    // function props / Map / Date / etc. serialize fine.
+    if (ctx.boundaryMap.get(sourceFile.fileName) === 'client') continue;
 
     const visit = (node: ts.Node): void => {
       if (ts.isJsxSelfClosingElement(node)) {
