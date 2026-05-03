@@ -164,6 +164,8 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   for (const sourceFile of ctx.program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
+    // Client → client renders don't cross the server/client boundary — nothing leaks.
+    if (ctx.boundaryMap.get(sourceFile.fileName) === 'client') continue;
 
     const visit = (node: ts.Node): void => {
       if (ts.isJsxSelfClosingElement(node)) {

@@ -1,6 +1,7 @@
 import { BadDeepChain } from '../components/bad-deep-chain.js';
 import { CorrectClient } from '../components/correct-client.js';
 import { CorrectPublicEnv } from '../components/correct-public-env.js';
+import { CorrectNodeEnv } from '../components/correct-node-env.js';
 import { BadDirectFs } from '../components/bad-direct-fs.js';
 import { BadDirectPrisma } from '../components/bad-direct-prisma.js';
 import { BadProcessEnv } from '../components/bad-process-env.js';
@@ -14,6 +15,7 @@ export default function Page(): JSX.Element {
       <BadDeepChain />
       <CorrectClient />
       <CorrectPublicEnv />
+      <CorrectNodeEnv />
       <BadDirectFs />
       <BadDirectPrisma />
       <BadProcessEnv />
