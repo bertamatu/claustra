@@ -4,43 +4,115 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
 
-> A CLI that audits Next.js App Router projects for the ways code or data can unsafely cross the server/client boundary. Static analysis only — no network calls, no telemetry, runs entirely on your machine.
+> **Catches the eight ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, or expose unauthenticated database writes.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
 
-**v1.0.0.** All eight rules ship as static checks (A1, A2, B1, B2, C1, C2, D1, D2). See [`RULES.md`](./RULES.md) for per-rule semantics, [`CLAUSTRA.md`](./CLAUSTRA.md) for the full spec, and [`ROADMAP.md`](./ROADMAP.md) for what's coming in v2+.
+---
 
-## Install & run
+## Why claustra exists
 
-```bash
-# One-off scan against the current Next.js project:
-npx claustra .
+Next.js App Router is powerful but unforgiving. The same file can mix code that runs on your server with code that runs in every visitor's browser, and the line between them is a single `'use client'` directive at the top of a file. **Cross that line wrong and one of three bad things happens:**
 
-# Or in CI:
-npx claustra . --reporter=github
+### 1. You leak server-only data into the browser bundle
 
-# Machine-readable output:
-npx claustra . --reporter=json --json-output=findings.json
+A function that fetches a user record from the database. A `process.env.STRIPE_SECRET_KEY` lookup. A whole row that includes `passwordHash`. If any of these end up reachable from a `'use client'` file — even five imports deep, even through a barrel file — the bundler quietly ships them to the browser. Every visitor's browser, every page load. Next.js' build only sometimes catches this.
+
+### 2. You break the page when it loads
+
+React hydration mismatches happen when the HTML the server sent doesn't match what the browser tries to render a millisecond later. Pages flash. Layouts shift. The error in production is a vague *"text content does not match server-rendered HTML"* you can't reproduce locally. The usual culprits are tiny: a `new Date()` in a render body, a `Math.random()` for a key, a `localStorage.getItem()` outside `useEffect`.
+
+### 3. You expose Server Actions without auth or validation
+
+Every Server Action (a function with `'use server'`) is a public HTTP POST endpoint — anyone can call it from any browser, with any payload, regardless of what your UI lets them do. TypeScript types are erased at runtime. Without explicit validation and an authorization check, a Server Action that updates user profiles can be called by anyone to update *anyone's* profile.
+
+**claustra catches all three classes statically, before the code ever runs.**
+
+---
+
+## See it in action
+
+Here's a real bug pattern claustra catches. Suppose you have a Server Component that loads a user from your database and passes it to a Client Component for display:
+
+```tsx
+// app/profile/page.tsx  (Server Component)
+import { db } from '@/lib/db';
+import { ProfileCard } from './ProfileCard';
+
+export default async function Page() {
+  const user = await db.user.findUnique({ where: { id: '...' } });
+  return <ProfileCard user={user} />;        // 🟥 the whole row crosses the boundary
+}
 ```
 
-No config required. Drop a `.claustra.json` in your project root if you want to tune severities, ignore paths, or extend `extraServerOnlyModules`. See `CLAUSTRA.md` for the full schema.
+Looks innocent. The problem: `db.user.findUnique` returns *every column on the row* — including `passwordHash`, `stripeCustomerId`, internal notes, anything else schema decides to add later. All of it gets serialized into the page HTML and into the JavaScript bundle the browser downloads. Anyone can View Source.
 
-## What it catches in v1.0
+Run `npx claustra .` and you get:
 
-| ID  | Rule                               | Severity | What it flags                                                                                          |
-| --- | ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
-| A1  | Server-only code in client tree    | critical | Modules reachable from a `'use client'` file that import Node builtins (`node:fs`, `node:crypto`, …), known server-only packages (`@prisma/client`, `pg`, `mongoose`, `bcrypt`, `jsonwebtoken`, `server-only`, …), or read non-`NEXT_PUBLIC_` `process.env` vars. Reports the full import chain through barrel re-exports, path aliases, and workspace packages. |
-| A2  | RSC pattern misuse                 | high     | Server APIs (`cookies`, `next/headers`, `server-only`) in `'use client'` files. React client hooks (`useState`, `useEffect`, `useRouter`) in server components. Event handlers on intrinsic JSX in server components. Misplaced `'use client'` / `'use server'` directives. Async client components. |
-| B1  | Non-serializable props             | high     | Functions, class instances, `Map`, `Set`, `Symbol`, `BigInt` passed as props to a `'use client'` component (`Date` flagged at medium). Server Actions exempted. Skips `children`, `Promise`, spread props (B2's job), and props passed to server components. |
-| B2  | Server data leakage to client      | critical | Sensitive prop names (`secret*`, `token*`, `password*`, `apiKey*`, `privateKey*`, `hash*`, `salt*`, `sessionId*`, `stripeSecret*`, `jwt*`), spread props (`<C {...obj} />`), and identifier-valued props that resolve to a Prisma/Mongoose query (`findFirst`/`findUnique`/`findMany`/`findOne`/…) without `select` or `omit`. |
-| C1  | Server Actions without validation  | critical | Forward taint from each Server Action's parameters into DB/FS writes, `fetch()` URL/body, or `revalidatePath`/`revalidateTag` — flagged when no recognized validator (Zod, Valibot, Yup, ArkType, TypeBox) sits on the path. `JSON.parse`, `Number(...)`, etc. are explicitly NOT counted as validators. |
-| C2  | Server Actions without auth        | high     | A function with file-level or inline `'use server'` that performs a DB/FS write (Prisma/Drizzle/Mongoose write methods, `fs.write*`/`rm*`/`rename*`, raw-SQL `INSERT/UPDATE/DELETE` template tags) before any recognized auth call (`auth()`, `getServerSession()`, `currentUser()`, `validateRequest()`, or `verify*`/`require*`/`check*`/`assert*`/`guard*` helpers). |
-| D1  | Hydration mismatch risks           | high     | `Date.now()` / bare `new Date()` / `Math.random()` / `crypto.randomUUID()` / `performance.now()` in render scope. Reads of `window` / `document` / `navigator` / `localStorage` / `sessionStorage`. Locale formatters without explicit locale. Skipped inside `useEffect`, event handlers, and on elements with `suppressHydrationWarning`. |
-| D2  | Caching & dynamic surprises        | medium   | `cookies()`/`headers()` in routes declared `force-static` (error) or `revalidate = N` (warning). Mismatched `revalidate` between route and `fetch`. `fetch` to `localhost`/`127.0.0.1`. Bare `fetch` in ISR routes on Next 15+ (no-store default). |
+```
+claustra found 1 issue in 1 file
 
-Each finding includes the rule ID, file:line, a one-line summary, an explanation of why it matters, and a concrete fix suggestion. Output reads like senior-engineer PR comments, not an ESLint dump.
+  ✖ critical  app/profile/page.tsx:6
+    B02-SERVER-DATA-LEAKAGE — Whole DB record passed as prop "user" to a Client Component
+    The value of this prop comes directly from a Prisma query that did not
+    specify a `select` or `omit`. The full row — including any private columns
+    — is serialized into the page HTML and JS.
+    → Add `select: { ... }` (or `omit: {...}`) to the query so only the fields
+      the UI needs cross the boundary, or destructure the safe fields explicitly.
 
-## Use in CI (GitHub Actions)
+1 issue: 1 critical
+```
 
-claustra ships a `--reporter=github` mode that emits [GitHub Actions annotations](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message), so findings show up inline on the PR diff.
+The fix:
+
+```tsx
+const user = await db.user.findUnique({
+  where: { id: '...' },
+  select: { id: true, name: true, avatarUrl: true },   // ✅ only what the UI needs
+});
+return <ProfileCard user={user} />;
+```
+
+That's the shape of every claustra finding: rule ID, file:line, plain-English explanation of why it matters, and a concrete fix.
+
+---
+
+## Quickstart (5 minutes, zero config)
+
+You need **Node.js 20 or newer** and a Next.js project that uses the App Router.
+
+### 1. Check your Node version
+
+```bash
+node --version
+```
+
+If it prints `v20.x` or higher you're good. If not, install the latest LTS from [nodejs.org](https://nodejs.org/) or use [nvm](https://github.com/nvm-sh/nvm).
+
+### 2. Run claustra against your project
+
+From inside your Next.js project root:
+
+```bash
+npx claustra .
+```
+
+The first run downloads claustra (~74 KB), the second run is instant. No install step, no config file, no flags required.
+
+### 3. Read the output
+
+Each finding tells you four things:
+
+| Part | Example | What it means |
+|---|---|---|
+| **Severity** | `✖ critical` | How bad. critical → fix today. high → before merge. medium → when you can. |
+| **Location** | `app/profile/page.tsx:6` | The exact file and line, click-through in most terminals. |
+| **What & why** | `B02 — Whole DB record passed as prop "user"` | The rule + a one-line explanation of why this is a bug. |
+| **How to fix** | `→ Add select: { ... } to the query` | A concrete, actionable suggestion. |
+
+The exit code matches the severity: `0` if nothing serious, `1` if anything at or above your `--severity` threshold (default `high`), `2` if claustra itself crashed.
+
+### 4. Wire it into CI (optional, recommended)
+
+Drop this file in your repo:
 
 ```yaml
 # .github/workflows/claustra.yml
@@ -55,14 +127,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+        with: { node-version: '20' }
       - run: npx -y claustra@latest . --reporter=github
 ```
 
-The job exits non-zero whenever any finding meets `--severity` (default `high`), so it doubles as a required check.
+The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message), so findings appear inline on your pull-request diff. The job fails on any high-or-above finding, so it doubles as a required check.
 
-## How it compares
+---
+
+## What it checks
+
+Eight rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+
+**Boundary integrity (A)**
+- **A1** — Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
+- **A2** — RSC pattern misuse: `cookies()`/`useState`/event handlers in the wrong component type, misplaced directives.
+
+**Data crossing the boundary (B)**
+- **B1** — Non-serializable props: functions, classes, `Map`/`Set`/`Symbol`/`BigInt`, raw `Date`.
+- **B2** — Server data leakage: sensitive prop names, spread props, whole DB records crossing into Client Components.
+
+**Server Action safety (C)**
+- **C1** — Server Actions whose parameters reach a database write, `fetch()`, or cache invalidation without passing through a recognized validator (Zod, Valibot, Yup, ArkType, TypeBox).
+- **C2** — Server Actions that mutate without an authorization check (NextAuth `auth()`, Clerk `currentUser()`, Lucia `validateRequest()`, custom `verify*`/`require*`/`check*` helpers).
+
+**Rendering correctness (D)**
+- **D1** — Hydration mismatch risks: `Date`, `Math.random()`, browser globals in render scope, locale formatters without explicit locale.
+- **D2** — Caching & dynamic-rendering surprises: Next.js 14 ↔ 15 default-`fetch` behavior, `cookies()`/`headers()` in statically-cached routes, ISR mismatches.
+
+---
+
+## How claustra compares
 
 | Capability                                            | claustra | `eslint-config-next` | TypeScript |
 | ----------------------------------------------------- | :------: | :------------------: | :--------: |
@@ -76,28 +171,78 @@ The job exits non-zero whenever any finding meets `--severity` (default `high`),
 | Next.js 14↔15 caching/`fetch` default differences     |    ✅    |          ❌          |     ❌     |
 | Runs locally, no API keys, no telemetry               |    ✅    |          ✅          |     ✅     |
 
-claustra is meant to run **alongside** `eslint-config-next` and TypeScript, not replace them. ESLint covers style and generic React rules; TypeScript covers type errors; claustra covers the App-Router-specific boundary failures the other two miss.
+claustra is meant to run **alongside** `eslint-config-next` and TypeScript, not replace them. ESLint covers style and generic React rules. TypeScript catches type mismatches. claustra catches the App-Router-specific *boundary* failures — the kind that compile cleanly, pass type-check, look correct on a code review, and still ship a security bug.
 
-## CLI
+---
+
+## FAQ
+
+**Does claustra send my source code anywhere?**
+No. Zero network calls during a scan. No telemetry. No API keys. The only files it reads are inside the project you point it at; the only output is the findings on stdout (or wherever `--json-output` writes). Run it on the most private codebase you have.
+
+**Does it work with Pages Router?**
+No — App Router only. Pages Router has different boundary semantics, and trying to support both would dilute every rule. Mixed-router projects work for the App Router files; Pages Router files are silently skipped.
+
+**How long does a scan take?**
+About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra itself (~74 KB), which takes another second or two. CI runs are network-bound for the install, scan-bound for the rest.
+
+**What about false positives?**
+Each rule has fixture-based tests (about 190 total across all 8 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction — that's exactly the feedback loop that improves the rules.
+
+**Do I need to install anything besides `npx claustra`?**
+Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.
+
+**Is there a paid version, hosted dashboard, or sign-up?**
+No. MIT-licensed, free forever, no upsell, no cloud component. The "fully local" design is deliberate — the codebase you scan is yours and stays yours.
+
+**My team uses a custom auth helper. Will C2 recognize it?**
+If your helper's name matches `verify*Auth/Session/User/Permission/Role/Access`, `require*…`, `check*…`, `assert*…`, or `guard*…` (case-insensitive), yes. Otherwise either rename to match or open a PR adding the helper name to the recognized list.
+
+**Will it run as part of `next lint`?**
+Not in v1. claustra is a standalone CLI. An ESLint-plugin wrapper is on the v2 roadmap, and the existing CLI is meant to coexist with `next lint`/ESLint, not replace it.
+
+**Can I disable specific rules or whole categories?**
+Yes — drop a `.claustra.json` next to your `package.json`:
+
+```json
+{
+  "rules": {
+    "d02-caching-dynamic": "off",
+    "b01-non-serializable-props": "warn"
+  },
+  "extraServerOnlyModules": ["@my-org/internal-secrets"],
+  "ignore": ["**/legacy/**"]
+}
+```
+
+Or pass `--rules a01,b02,c01` on the command line for a subset.
+
+---
+
+## CLI reference
 
 ```
-npx claustra [path]                       # scan, default cwd
-  --config <file>                         # default .claustra.json
-  --reporter <terminal|json|github>       # default terminal
-  --severity <critical|high|medium|low>   # min severity to fail (default high)
-  --rules <a02,d01,...>                   # run subset
-  --json-output <path>                    # write findings to file
+npx claustra [path]                          # scan, default cwd
+  --config <file>                            # default .claustra.json
+  --reporter <terminal|json|github>          # default terminal
+  --severity <critical|high|medium|low>      # min severity to fail (default high)
+  --rules <a01,b02,...>                      # run subset
+  --json-output <path>                       # write findings to a file
+  --version
+  --help
 ```
 
-Exit codes: `0` (no findings at/above threshold), `1` (findings at/above threshold), `2` (internal error).
+**Exit codes:** `0` (no findings at/above threshold), `1` (findings at/above threshold), `2` (internal error — bad config, missing tsconfig, etc.).
+
+---
 
 ## License
 
-MIT. See [`LICENSE`](./LICENSE).
+MIT — see [`LICENSE`](./LICENSE). Use it on any codebase, public or private. Modify it. Bundle it. No attribution required (though stars are welcome).
 
 ## Documentation
 
-- [`CLAUSTRA.md`](./CLAUSTRA.md) — full project spec (locked types, CLI surface, milestones)
-- [`RULES.md`](./RULES.md) — every rule with authoritative source links (Next.js docs, React docs, CVEs)
+- [`RULES.md`](./RULES.md) — every rule with code examples, authoritative sources (Next.js docs, React docs, CVEs), and known limitations
+- [`CLAUSTRA.md`](./CLAUSTRA.md) — full project specification (locked types, CLI surface, milestones)
 - [`ROADMAP.md`](./ROADMAP.md) — what's planned for v2+
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — how to add a new rule
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — how to add or improve a rule
