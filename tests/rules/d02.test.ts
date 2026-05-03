@@ -30,6 +30,7 @@ describe('d02 — caching and dynamic surprises', () => {
       tsConfigPath,
       program,
       checker,
+      moduleGraph: graph,
       boundaryMap,
       nextVersion: findNextVersion(FIXTURE_ROOT),
       config: RESOLVED_CONFIG,

@@ -11,3 +11,29 @@ export const hasDirective = (
   }
   return false;
 };
+
+export type ModuleSpecRef = {
+  spec: string;
+  stmt: ts.ImportDeclaration | ts.ExportDeclaration;
+};
+
+export const collectModuleSpecRefs = (
+  sourceFile: ts.SourceFile,
+): ModuleSpecRef[] => {
+  const out: ModuleSpecRef[] = [];
+  for (const stmt of sourceFile.statements) {
+    if (
+      ts.isImportDeclaration(stmt) &&
+      ts.isStringLiteral(stmt.moduleSpecifier)
+    ) {
+      out.push({ spec: stmt.moduleSpecifier.text, stmt });
+    } else if (
+      ts.isExportDeclaration(stmt) &&
+      stmt.moduleSpecifier &&
+      ts.isStringLiteral(stmt.moduleSpecifier)
+    ) {
+      out.push({ spec: stmt.moduleSpecifier.text, stmt });
+    }
+  }
+  return out;
+};
