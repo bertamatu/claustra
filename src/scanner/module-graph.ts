@@ -1,5 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
+import { collectModuleSpecRefs } from '../utils/ast.js';
 
 export type ModuleGraph = Map<string, Set<string>>;
 
@@ -30,19 +31,10 @@ export const buildModuleGraph = (program: ts.Program): ModuleGraph => {
 
     const imports = new Set<string>();
 
-    for (const stmt of sourceFile.statements) {
-      if (
-        ts.isImportDeclaration(stmt) &&
-        ts.isStringLiteral(stmt.moduleSpecifier)
-      ) {
-        const resolved = resolveImport(
-          stmt.moduleSpecifier.text,
-          sourceFile.fileName,
-          program,
-        );
-        if (resolved && !resolved.includes('node_modules')) {
-          imports.add(resolved);
-        }
+    for (const { spec } of collectModuleSpecRefs(sourceFile)) {
+      const resolved = resolveImport(spec, sourceFile.fileName, program);
+      if (resolved && !resolved.includes('node_modules')) {
+        imports.add(resolved);
       }
     }
 

@@ -62,6 +62,7 @@ program
         tsConfigPath,
         program: tsProgram,
         checker,
+        moduleGraph,
         boundaryMap,
         nextVersion,
         config,

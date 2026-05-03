@@ -30,6 +30,7 @@ describe('d01 — hydration mismatch risks', () => {
       tsConfigPath,
       program,
       checker,
+      moduleGraph: graph,
       boundaryMap,
       nextVersion: findNextVersion(FIXTURE_ROOT),
       config: RESOLVED_CONFIG,
