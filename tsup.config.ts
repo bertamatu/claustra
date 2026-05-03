@@ -10,7 +10,7 @@ export default defineConfig({
   sourcemap: true,
   // Keep runtime deps external — they're in `dependencies` and installed alongside the binary.
   // Only our own source is bundled.
-  external: ['commander', 'picocolors', 'typescript', 'zod', '@anthropic-ai/sdk'],
+  external: ['commander', 'picocolors', 'typescript', 'zod'],
   banner: {
     js: '#!/usr/bin/env node',
   },
