@@ -9,6 +9,7 @@ import { terminalReporter } from './reporters/terminal.js';
 import { jsonReporter } from './reporters/json.js';
 import { githubReporter } from './reporters/github.js';
 import { logger } from './utils/logger.js';
+import { matchesAnyGlob } from './utils/glob.js';
 import type { Finding, ProjectContext } from './rules/types.js';
 import { writeFileSync } from 'node:fs';
 
@@ -17,7 +18,7 @@ const program = new Command();
 program
   .name('claustra')
   .description('Audits Next.js App Router projects for server/client boundary violations.')
-  .version('1.0.0')
+  .version('1.0.1')
   .argument('[path]', 'project root to scan', '.')
   .option('--config <file>', 'path to config file (default: .claustra.json)')
   .option('--reporter <type>', 'output format: terminal | json | github', 'terminal')
@@ -71,6 +72,12 @@ program
         }),
       );
 
+      // Apply user-configured ignore globs to finding paths.
+      const filteredFindings =
+        config.ignore.length > 0
+          ? allFindings.filter((f) => !matchesAnyGlob(f.file, config.ignore))
+          : allFindings;
+
       const SEVERITY_ORDER: Record<string, number> = {
         critical: 0,
         high: 1,
@@ -78,7 +85,7 @@ program
         low: 3,
       };
 
-      allFindings.sort((a, b) => {
+      filteredFindings.sort((a, b) => {
         const sDiff = (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4);
         if (sDiff !== 0) return sDiff;
         if (a.file !== b.file) return a.file.localeCompare(b.file);
@@ -86,19 +93,19 @@ program
       });
 
       if (opts.jsonOutput) {
-        writeFileSync(opts.jsonOutput, JSON.stringify({ findings: allFindings }, null, 2));
+        writeFileSync(opts.jsonOutput, JSON.stringify({ findings: filteredFindings }, null, 2));
       }
 
       if (opts.reporter === 'json') {
-        jsonReporter(allFindings);
+        jsonReporter(filteredFindings);
       } else if (opts.reporter === 'github') {
-        githubReporter(allFindings);
+        githubReporter(filteredFindings);
       } else {
-        terminalReporter(allFindings);
+        terminalReporter(filteredFindings);
       }
 
       const minSeverityOrder = SEVERITY_ORDER[opts.severity] ?? 1;
-      const hasBlockingFindings = allFindings.some(
+      const hasBlockingFindings = filteredFindings.some(
         (f) => (SEVERITY_ORDER[f.severity] ?? 4) <= minSeverityOrder,
       );
 
