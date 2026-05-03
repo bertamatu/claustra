@@ -1,4 +1,5 @@
 import type * as ts from 'typescript';
+import type { ModuleGraph } from '../scanner/module-graph.js';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -28,6 +29,7 @@ export type ProjectContext = {
   tsConfigPath: string;
   program: ts.Program;
   checker: ts.TypeChecker;
+  moduleGraph: ModuleGraph;
   boundaryMap: Map<string, FileBoundary>;
   nextVersion: string;
   config: ResolvedConfig;

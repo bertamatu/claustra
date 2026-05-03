@@ -26,6 +26,7 @@ const buildContext = (extraServerOnlyModules: string[]): ProjectContext => {
     tsConfigPath,
     program,
     checker,
+    moduleGraph: graph,
     boundaryMap,
     nextVersion: findNextVersion(FIXTURE_ROOT),
     config,
@@ -74,6 +75,19 @@ describe('a01 — server-only code reachable from client tree', () => {
     expect(chain[chain.length - 1]).toBe('@prisma/client');
     expect(chain).toContain('lib/user-service.ts');
     expect(chain).toContain('lib/db.ts');
+  });
+
+  // ───────────── Barrel re-exports ─────────────
+
+  it('flags a server-only package reached through a barrel re-export', () => {
+    const f = findFor('lib/barrel-leaf.ts');
+    expect(f.some((x) => x.message.includes('mongoose'))).toBe(true);
+    const finding = f.find((x) => x.message.includes('mongoose'));
+    const chain = finding?.importChain ?? [];
+    expect(chain[0]).toMatch(/bad-via-barrel\.tsx$/);
+    expect(chain).toContain('lib/barrel.ts');
+    expect(chain).toContain('lib/barrel-leaf.ts');
+    expect(chain[chain.length - 1]).toBe('mongoose');
   });
 
   // ───────────── process.env ─────────────

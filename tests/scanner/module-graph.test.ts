@@ -80,6 +80,51 @@ describe('getTransitiveDeps', () => {
   });
 });
 
+describe('buildModuleGraph — re-exports', () => {
+  const FIXTURE = path.resolve(__dirname, '../fixtures/a01-server-only-leak');
+  const { program } = buildProgram(findTsConfig(FIXTURE));
+  const graph = buildModuleGraph(program);
+  const abs = (rel: string): string => path.join(FIXTURE, rel);
+
+  it('follows `export * from` re-exports as graph edges', () => {
+    const deps = graph.get(abs('lib/barrel.ts'));
+    expect(deps).toBeDefined();
+    expect(deps).toContain(abs('lib/barrel-leaf.ts'));
+  });
+
+  it('connects a client component to a barrel re-export target transitively', () => {
+    const reachable = getTransitiveDeps(abs('components/bad-via-barrel.tsx'), graph);
+    expect(reachable.has(abs('lib/barrel.ts'))).toBe(true);
+    expect(reachable.has(abs('lib/barrel-leaf.ts'))).toBe(true);
+  });
+});
+
+describe('buildModuleGraph — tsconfig path aliases', () => {
+  const FIXTURE = path.resolve(__dirname, '../fixtures/module-graph-aliases');
+  const { program } = buildProgram(findTsConfig(FIXTURE));
+  const graph = buildModuleGraph(program);
+  const abs = (rel: string): string => path.join(FIXTURE, rel);
+
+  it('resolves "@/lib/db" to the aliased file path', () => {
+    const deps = graph.get(abs('src/client.tsx'));
+    expect(deps).toBeDefined();
+    expect(deps).toContain(abs('src/lib/db.ts'));
+  });
+});
+
+describe('buildModuleGraph — monorepo workspace via paths', () => {
+  const FIXTURE = path.resolve(__dirname, '../fixtures/module-graph-monorepo');
+  const { program } = buildProgram(findTsConfig(FIXTURE));
+  const graph = buildModuleGraph(program);
+  const abs = (rel: string): string => path.join(FIXTURE, rel);
+
+  it('resolves a workspace package import across packages/', () => {
+    const deps = graph.get(abs('packages/app/page.tsx'));
+    expect(deps).toBeDefined();
+    expect(deps).toContain(abs('packages/db/src/index.ts'));
+  });
+});
+
 describe('getImportChain', () => {
   it('finds a direct import chain', () => {
     const graph: ModuleGraph = new Map([
