@@ -6,6 +6,7 @@ import { BadDirectPrisma } from '../components/bad-direct-prisma.js';
 import { BadProcessEnv } from '../components/bad-process-env.js';
 import { BadServerOnly } from '../components/bad-server-only.js';
 import { BadExtraPkg } from '../components/bad-extra-pkg.js';
+import { BadViaBarrel } from '../components/bad-via-barrel.js';
 
 export default function Page(): JSX.Element {
   return (
@@ -18,6 +19,7 @@ export default function Page(): JSX.Element {
       <BadProcessEnv />
       <BadServerOnly />
       <BadExtraPkg />
+      <BadViaBarrel />
     </main>
   );
 }

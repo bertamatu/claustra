@@ -30,6 +30,7 @@ describe('a02 — RSC pattern misuse', () => {
       tsConfigPath,
       program,
       checker,
+      moduleGraph: graph,
       boundaryMap,
       nextVersion: findNextVersion(FIXTURE_ROOT),
       config: RESOLVED_CONFIG,

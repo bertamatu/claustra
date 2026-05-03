@@ -1,6 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
-import { hasDirective } from '../utils/ast.js';
+import { collectModuleSpecRefs, hasDirective } from '../utils/ast.js';
 import type { Finding, ProjectContext, Rule, Severity } from './types.js';
 
 const RULE_ID = 'a01-server-only-in-client';
@@ -78,27 +78,12 @@ const collectClientReachableParents = (
 
   while (queue.length > 0) {
     const file = queue.shift()!;
-    const sf = ctx.program.getSourceFile(file);
-    if (!sf) continue;
-    for (const stmt of sf.statements) {
-      if (
-        !ts.isImportDeclaration(stmt) ||
-        !ts.isStringLiteral(stmt.moduleSpecifier)
-      ) {
-        continue;
-      }
-      const resolved = ts.resolveModuleName(
-        stmt.moduleSpecifier.text,
-        file,
-        ctx.program.getCompilerOptions(),
-        ts.sys,
-      );
-      const resolvedFile = resolved.resolvedModule?.resolvedFileName;
-      if (!resolvedFile) continue;
-      if (resolvedFile.includes('node_modules')) continue;
-      if (parents.has(resolvedFile)) continue;
-      parents.set(resolvedFile, file);
-      queue.push(resolvedFile);
+    const deps = ctx.moduleGraph.get(file);
+    if (!deps) continue;
+    for (const dep of deps) {
+      if (parents.has(dep)) continue;
+      parents.set(dep, file);
+      queue.push(dep);
     }
   }
 
@@ -165,15 +150,8 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 
     const chainTo = buildChain(file, parents, rel);
 
-    // Imports
-    for (const stmt of sf.statements) {
-      if (
-        !ts.isImportDeclaration(stmt) ||
-        !ts.isStringLiteral(stmt.moduleSpecifier)
-      ) {
-        continue;
-      }
-      const spec = stmt.moduleSpecifier.text;
+    // Imports + re-exports
+    for (const { spec, stmt } of collectModuleSpecRefs(sf)) {
       const match = matchServerOnlyModule(spec, extras);
       if (!match) continue;
 
