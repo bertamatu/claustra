@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { terminalReporter } from '../../src/reporters/terminal.js';
 import type { Finding } from '../../src/rules/types.js';
 
+// eslint-disable-next-line no-control-regex -- ANSI escape sequences are by definition control chars
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 
 const finding = (overrides: Partial<Finding> = {}): Finding => ({
