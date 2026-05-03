@@ -7,3 +7,8 @@ node_modules/.cache/
 coverage/
 .DS_Store
 *.pem
+
+# Fixtures intentionally ship a fake `node_modules/next/package.json` so
+# version-aware rules (D2) can be tested without a real install.
+!tests/fixtures/**/node_modules/
+!tests/fixtures/**/node_modules/**
