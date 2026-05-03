@@ -17,7 +17,7 @@ const program = new Command();
 program
   .name('claustra')
   .description('Audits Next.js App Router projects for server/client boundary violations.')
-  .version('0.3.0')
+  .version('0.4.0')
   .argument('[path]', 'project root to scan', '.')
   .option('--config <file>', 'path to config file (default: .claustra.json)')
   .option('--reporter <type>', 'output format: terminal | json | github', 'terminal')
