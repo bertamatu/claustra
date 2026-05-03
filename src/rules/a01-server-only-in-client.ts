@@ -180,7 +180,9 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 
     // process.env reads
     for (const { key, node } of collectProcessEnvReads(sf)) {
+      // NEXT_PUBLIC_* and NODE_ENV are inlined for the client by Next.js — safe to read anywhere.
       if (key.startsWith('NEXT_PUBLIC_')) continue;
+      if (key === 'NODE_ENV') continue;
       const { line, column } = lineCol(sf, node);
       findings.push({
         ruleId: RULE_ID,
@@ -190,7 +192,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
         column,
         message: `process.env.${key} read in client-reachable code`,
         detail:
-          'Only NEXT_PUBLIC_-prefixed env vars are inlined for the browser. Other reads are undefined client-side or, worse, leak server secrets if the bundler picks them up.',
+          'Only NEXT_PUBLIC_-prefixed env vars and NODE_ENV are inlined for the browser. Other reads are undefined client-side or, worse, leak server secrets if the bundler picks them up.',
         suggestion: `Rename to NEXT_PUBLIC_${key} if the value is safe to expose, or move the read to a Server Component / Server Action and pass the result down.`,
         importChain: chainTo,
       });
