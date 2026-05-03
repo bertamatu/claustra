@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -70,5 +71,31 @@ describe('claustra CLI (integration)', () => {
     const { status, stderr } = runCli('/tmp/claustra-nonexistent-path-xyz');
     expect(status).toBe(2);
     expect(stderr).toContain('No tsconfig.json found');
+  });
+
+  it('honours `.claustra.json` ignore globs to filter findings by file path', () => {
+    // Baseline: how many findings come back without filtering?
+    const baseline = JSON.parse(
+      runCli(FIXTURE, '--reporter', 'json').stdout,
+    ) as { findings: { file: string }[] };
+    const totalBefore = baseline.findings.length;
+    const componentsBefore = baseline.findings.filter((f) => f.file.startsWith('components/')).length;
+    expect(totalBefore).toBeGreaterThan(0);
+    expect(componentsBefore).toBeGreaterThan(0);
+
+    // Write a temp config that ignores the components/ tree.
+    const dir = mkdtempSync(path.join(tmpdir(), 'claustra-ignore-'));
+    const configPath = path.join(dir, '.claustra.json');
+    writeFileSync(configPath, JSON.stringify({ ignore: ['components/**'] }));
+    try {
+      const { stdout } = runCli(FIXTURE, '--reporter', 'json', '--config', configPath);
+      const parsed = JSON.parse(stdout) as { findings: { file: string }[] };
+      // No finding should reference components/.
+      expect(parsed.findings.every((f) => !f.file.startsWith('components/'))).toBe(true);
+      // And the filtered count should equal baseline minus the components/ findings.
+      expect(parsed.findings.length).toBe(totalBefore - componentsBefore);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

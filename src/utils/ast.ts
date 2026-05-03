@@ -1,4 +1,13 @@
+import path from 'node:path';
 import ts from 'typescript';
+
+// Next.js metadata-convention files: these run server-side at build/request
+// time and never hydrate, so render-related rules (D1, etc.) don't apply.
+// Source: https://nextjs.org/docs/app/api-reference/file-conventions/metadata
+const NEXT_METADATA_BASENAMES = /^(sitemap|robots|manifest|opengraph-image|twitter-image|icon|apple-icon|favicon)\.(ts|tsx|js|jsx)$/;
+
+export const isNextMetadataFile = (sourceFile: ts.SourceFile): boolean =>
+  NEXT_METADATA_BASENAMES.test(path.basename(sourceFile.fileName));
 
 export const hasDirective = (
   sourceFile: ts.SourceFile,
