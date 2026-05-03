@@ -6,7 +6,7 @@
 
 > A CLI that audits Next.js App Router projects for the ways code or data can unsafely cross the server/client boundary. Static analysis only — no network calls, no telemetry, runs entirely on your machine.
 
-**v0.4.0 — release candidate.** All eight rules ship as static checks (A1, A2, B1, B2, C1, C2, D1, D2). The remaining v1.0 work is a demo GIF and the npm tag; see [`ROADMAP.md`](./ROADMAP.md) and [`CLAUSTRA.md`](./CLAUSTRA.md).
+**v1.0.0.** All eight rules ship as static checks (A1, A2, B1, B2, C1, C2, D1, D2). See [`RULES.md`](./RULES.md) for per-rule semantics, [`CLAUSTRA.md`](./CLAUSTRA.md) for the full spec, and [`ROADMAP.md`](./ROADMAP.md) for what's coming in v2+.
 
 ## Install & run
 
@@ -23,7 +23,7 @@ npx claustra . --reporter=json --json-output=findings.json
 
 No config required. Drop a `.claustra.json` in your project root if you want to tune severities, ignore paths, or extend `extraServerOnlyModules`. See `CLAUSTRA.md` for the full schema.
 
-## What it catches in v0.4.0
+## What it catches in v1.0
 
 | ID  | Rule                               | Severity | What it flags                                                                                          |
 | --- | ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
