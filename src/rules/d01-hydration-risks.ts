@@ -244,7 +244,6 @@ export const rule: Rule = {
   description:
     'Detects expressions in render scope that produce different values on server vs client (Date, Math.random, browser globals, locale formatting).',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 

@@ -19,7 +19,6 @@ const buildContext = (extraServerOnlyModules: string[]): ProjectContext => {
     rules: {},
     extraServerOnlyModules,
     ignore: [],
-    llm: { enabled: false, model: '' },
   };
   return {
     rootDir: FIXTURE_ROOT,
