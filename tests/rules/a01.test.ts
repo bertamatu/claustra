@@ -102,6 +102,10 @@ describe('a01 — server-only code reachable from client tree', () => {
     expect(findFor('components/correct-public-env.tsx')).toHaveLength(0);
   });
 
+  it('does NOT flag process.env.NODE_ENV (Next.js inlines it for the client bundle)', () => {
+    expect(findFor('components/correct-node-env.tsx')).toHaveLength(0);
+  });
+
   // ───────────── Config: extraServerOnlyModules ─────────────
 
   it('flags imports of extraServerOnlyModules entries', () => {

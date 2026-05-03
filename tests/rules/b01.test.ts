@@ -133,6 +133,13 @@ describe('b01 — non-serializable props', () => {
     expect(true).toBe(true);
   });
 
+  it('does NOT flag a Client Component rendering other Client Components (no boundary crossed)', () => {
+    // ClientParent is itself 'use client' and renders <Widget> with all sorts of
+    // non-serializable props. Both sides run in the browser — nothing crosses the boundary.
+    const f = findings.filter((x) => x.file === 'components/client-parent.tsx');
+    expect(f).toHaveLength(0);
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('every finding has the correct rule id and a 1-based location', () => {

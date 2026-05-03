@@ -100,6 +100,13 @@ describe('b02 — server data leakage to client', () => {
     expect(text).not.toContain('"email"');
   });
 
+  it('does NOT flag a Client Component rendering other Client Components (no boundary crossed)', () => {
+    // ClientParent is itself 'use client' and renders <Card secret={...} {...obj} />.
+    // Both sides run in the browser — nothing crosses the boundary.
+    const f = findings.filter((x) => x.file === 'components/client-parent.tsx');
+    expect(f).toHaveLength(0);
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('every finding has the correct rule id and critical severity', () => {
