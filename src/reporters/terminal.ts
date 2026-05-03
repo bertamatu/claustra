@@ -50,7 +50,7 @@ export const terminalReporter = (findings: Finding[]): void => {
     console.log();
   }
 
-  const summary = (Object.entries(counts) as [string, number][])
+  const summary = Object.entries(counts)
     .filter(([, n]) => n > 0)
     .map(([s, n]) => `${n} ${s}`)
     .join(', ');
