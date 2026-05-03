@@ -1,13 +1,55 @@
 {
   "name": "claustra",
-  "version": "0.0.1",
-  "description": "Coming soon: a Next.js App Router boundary auditor.",
+  "version": "0.1.0",
+  "description": "Audits Next.js App Router projects for server/client boundary violations.",
   "license": "MIT",
-  "author": "Your Name berta.codes@gmail.com",
+  "author": "Berta <berta.codes@gmail.com>",
   "repository": {
     "type": "git",
     "url": "https://github.com/bertamatu/claustra.git"
   },
-  "keywords": ["nextjs", "rsc", "lint", "audit", "server-components"],
-  "main": "index.js"
+  "keywords": [
+    "nextjs",
+    "rsc",
+    "audit",
+    "server-components",
+    "app-router",
+    "static-analysis"
+  ],
+  "type": "module",
+  "main": "./dist/cli.js",
+  "bin": {
+    "claustra": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "picocolors": "^1.1.0",
+    "typescript": "^5.7.0",
+    "zod": "^3.24.0"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.55.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
 }
