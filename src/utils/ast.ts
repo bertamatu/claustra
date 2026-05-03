@@ -12,6 +12,28 @@ export const hasDirective = (
   return false;
 };
 
+export const hasUseServerInBody = (
+  body: ts.Block | undefined,
+): boolean => {
+  if (!body) return false;
+  for (const stmt of body.statements) {
+    if (!ts.isExpressionStatement(stmt)) break;
+    if (!ts.isStringLiteral(stmt.expression)) break;
+    if (stmt.expression.text === 'use server') return true;
+  }
+  return false;
+};
+
+export const unwrapAlias = (
+  symbol: ts.Symbol,
+  checker: ts.TypeChecker,
+): ts.Symbol => {
+  if (symbol.flags & ts.SymbolFlags.Alias) {
+    return checker.getAliasedSymbol(symbol);
+  }
+  return symbol;
+};
+
 export type ModuleSpecRef = {
   spec: string;
   stmt: ts.ImportDeclaration | ts.ExportDeclaration;
