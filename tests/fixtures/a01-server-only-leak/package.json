@@ -2,8 +2,5 @@
   "name": "fixture-a01-server-only-leak",
   "version": "0.0.0",
   "private": true,
-  "dependencies": {
-    "next": "15.0.0",
-    "react": "19.0.0"
-  }
+  "//": "Fixture metadata only — never installed. claustra reads <scanned-project>/node_modules/next/package.json for version detection, not this manifest."
 }

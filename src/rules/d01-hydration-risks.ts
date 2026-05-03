@@ -1,5 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
+import { isNextMetadataFile } from '../utils/ast.js';
 import type { Finding, ProjectContext, Rule, Severity } from './types.js';
 
 const RULE_ID = 'd01-hydration-risks';
@@ -31,6 +32,74 @@ const getRootObject = (expr: ts.Expression): string | undefined => {
     current = current.expression;
   }
   return ts.isIdentifier(current) ? current.text : undefined;
+};
+
+const BROWSER_GLOBAL_NAMES = new Set([
+  'window',
+  'document',
+  'navigator',
+  'localStorage',
+  'sessionStorage',
+]);
+
+// Detects `if (typeof X === 'undefined') return/throw;` (or X !== 'undefined' as the `else`)
+// where X is a browser global. The pattern gates server-side execution; everything
+// after it in the same function body is client-only.
+const isTypeofBrowserUndefinedGuard = (stmt: ts.Statement): boolean => {
+  if (!ts.isIfStatement(stmt)) return false;
+
+  const matchesUndefinedCheck = (cond: ts.Expression): boolean => {
+    if (!ts.isBinaryExpression(cond)) return false;
+    const op = cond.operatorToken.kind;
+    const isEquals =
+      op === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+      op === ts.SyntaxKind.EqualsEqualsToken;
+    if (!isEquals) return false;
+    const oneSide = (a: ts.Expression, b: ts.Expression): boolean =>
+      ts.isTypeOfExpression(a) &&
+      ts.isIdentifier(a.expression) &&
+      BROWSER_GLOBAL_NAMES.has(a.expression.text) &&
+      ts.isStringLiteral(b) &&
+      b.text === 'undefined';
+    return oneSide(cond.left, cond.right) || oneSide(cond.right, cond.left);
+  };
+
+  if (!matchesUndefinedCheck(stmt.expression)) return false;
+
+  // The `then` branch must early-exit (return/throw) so subsequent code is gated.
+  const exits = (s: ts.Statement): boolean => {
+    if (ts.isReturnStatement(s) || ts.isThrowStatement(s)) return true;
+    if (ts.isBlock(s)) return s.statements.some(exits);
+    return false;
+  };
+  return exits(stmt.thenStatement);
+};
+
+// Returns true if `node` sits in a function body whose earlier statements include
+// a `if (typeof <browser-global> === 'undefined') return/throw;` early-exit guard.
+const hasTypeofBrowserGuard = (node: ts.Node): boolean => {
+  let cur: ts.Node | undefined = node;
+  while (cur !== undefined) {
+    const parent = cur.parent as ts.Node | undefined;
+    if (
+      parent &&
+      ts.isBlock(parent) &&
+      parent.parent &&
+      (ts.isFunctionDeclaration(parent.parent) ||
+        ts.isFunctionExpression(parent.parent) ||
+        ts.isArrowFunction(parent.parent) ||
+        ts.isMethodDeclaration(parent.parent))
+    ) {
+      // `cur` is the statement-level ancestor inside the function body.
+      for (const stmt of parent.statements) {
+        if (stmt === cur) break;
+        if (isTypeofBrowserUndefinedGuard(stmt)) return true;
+      }
+      return false;
+    }
+    cur = parent;
+  }
+  return false;
 };
 
 const isInSafeContext = (node: ts.Node): boolean => {
@@ -67,6 +136,9 @@ const isInSafeContext = (node: ts.Node): boolean => {
     }
     current = current.parent;
   }
+  // After a `if (typeof window === 'undefined') return;`-style guard, all subsequent
+  // browser-global reads in the same function are gated to the client.
+  if (hasTypeofBrowserGuard(node)) return true;
   return suppressed;
 };
 
@@ -166,6 +238,10 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   for (const sourceFile of ctx.program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
+    // Next.js metadata-convention files (sitemap.ts, robots.ts, manifest.ts,
+    // opengraph-image.tsx, etc.) run server-side at build/request time and
+    // never hydrate, so render-scope hydration checks don't apply.
+    if (isNextMetadataFile(sourceFile)) continue;
 
     const file = rel(sourceFile.fileName);
 
