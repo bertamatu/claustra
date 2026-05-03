@@ -55,8 +55,15 @@ describe('claustra CLI (integration)', () => {
     expect(parsed.findings.some((f) => f.ruleId === 'a02-rsc-pattern-misuse')).toBe(true);
   });
 
-  it('exits 0 when --severity=critical because no findings reach that bar', () => {
-    const { status } = runCli(FIXTURE, '--no-llm', '--severity', 'critical');
+  it('exits 0 when --severity=critical and only sub-critical rules are enabled', () => {
+    const { status } = runCli(
+      FIXTURE,
+      '--no-llm',
+      '--severity',
+      'critical',
+      '--rules',
+      'a02-rsc-pattern-misuse,d01-hydration-risks,d02-caching-dynamic',
+    );
     expect(status).toBe(0);
   });
 
