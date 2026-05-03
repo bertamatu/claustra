@@ -1,0 +1,9 @@
+{
+  "name": "fixture-b02-leakage",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "next": "15.0.0",
+    "react": "19.0.0"
+  }
+}
