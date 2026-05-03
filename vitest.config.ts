@@ -10,11 +10,10 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
       include: ['src/**/*.ts'],
-      // Excluded: cli.ts (covered via integration test), judges.ts (needs mocked Anthropic),
+      // Excluded: cli.ts (covered via integration test),
       // types.ts (no runtime), rules/index.ts (empty registry placeholder).
       exclude: [
         'src/cli.ts',
-        'src/llm/judges.ts',
         'src/rules/types.ts',
         'src/rules/index.ts',
       ],

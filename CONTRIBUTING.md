@@ -13,9 +13,11 @@ Rules without a RULES.md section will be closed.
 
 ```bash
 pnpm install
-pnpm build        # compile
+pnpm build        # compile via tsup
 pnpm test         # run all tests
-pnpm lint         # type-check only (no eslint in v1)
+pnpm lint         # eslint
+pnpm typecheck    # tsc --noEmit
+pnpm check        # lint + typecheck + test
 ```
 
 ## Releasing

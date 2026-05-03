@@ -1,8 +1,12 @@
 # claustra
 
+[![CI](https://github.com/bertamatu/claustra/actions/workflows/ci.yml/badge.svg)](https://github.com/bertamatu/claustra/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
+
 > A CLI that audits Next.js App Router projects for the ways code or data can unsafely cross the server/client boundary. Static analysis only — no network calls, no telemetry, runs entirely on your machine.
 
-**v0.4.0 — release candidate.** All eight rules live as static checks (A1, A2, B1, B2, C1, C2, D1, D2). v1.0 polish (GitHub Action snippet, demo, badges) is the only thing left; see [`ROADMAP.md`](./ROADMAP.md) and [`CLAUSTRA.md`](./CLAUSTRA.md).
+**v0.4.0 — release candidate.** All eight rules ship as static checks (A1, A2, B1, B2, C1, C2, D1, D2). The remaining v1.0 work is a demo GIF and the npm tag; see [`ROADMAP.md`](./ROADMAP.md) and [`CLAUSTRA.md`](./CLAUSTRA.md).
 
 ## Install & run
 
@@ -34,9 +38,45 @@ No config required. Drop a `.claustra.json` in your project root if you want to 
 
 Each finding includes the rule ID, file:line, a one-line summary, an explanation of why it matters, and a concrete fix suggestion. Output reads like senior-engineer PR comments, not an ESLint dump.
 
-## Coming before v1.0
+## Use in CI (GitHub Actions)
 
-- **GitHub Action** README snippet, demo GIF, badges
+claustra ships a `--reporter=github` mode that emits [GitHub Actions annotations](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message), so findings show up inline on the PR diff.
+
+```yaml
+# .github/workflows/claustra.yml
+name: claustra
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npx -y claustra@latest . --reporter=github
+```
+
+The job exits non-zero whenever any finding meets `--severity` (default `high`), so it doubles as a required check.
+
+## How it compares
+
+| Capability                                            | claustra | `eslint-config-next` | TypeScript |
+| ----------------------------------------------------- | :------: | :------------------: | :--------: |
+| Static module-graph trace from every `'use client'`   |    ✅    |          ❌          |     ❌     |
+| Server-only package + `node:fs`/env leak detection    |    ✅    |        partial       |     ❌     |
+| Non-serializable props (`Date`, `Map`, class, fn)     |    ✅    |          ❌          |   partial  |
+| Sensitive-data prop leakage (DB record, secrets)      |    ✅    |          ❌          |     ❌     |
+| Server Action input-validation taint analysis         |    ✅    |          ❌          |     ❌     |
+| Server Action authorization checks                    |    ✅    |          ❌          |     ❌     |
+| Hydration-mismatch render-scope checks                |    ✅    |        partial       |     ❌     |
+| Next.js 14↔15 caching/`fetch` default differences     |    ✅    |          ❌          |     ❌     |
+| Runs locally, no API keys, no telemetry               |    ✅    |          ✅          |     ✅     |
+
+claustra is meant to run **alongside** `eslint-config-next` and TypeScript, not replace them. ESLint covers style and generic React rules; TypeScript covers type errors; claustra covers the App-Router-specific boundary failures the other two miss.
 
 ## CLI
 
