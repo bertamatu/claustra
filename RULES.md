@@ -16,7 +16,7 @@ Each rule below has the same structure:
 - **Authoritative sources** — direct links to the official docs or advisories that establish this as a real concern
 - **Bad example** — minimal code that triggers the rule
 - **Fixed example** — the recommended way to write it
-- **Detection mechanism** — how claustra finds it (AST / module graph / data flow / LLM)
+- **Detection mechanism** — how claustra finds it (AST / module graph / type checker / data flow)
 - **Known limitations** — false positive/negative considerations
 
 Every claustra finding in the terminal includes a `Source: <url>` line linking back to the relevant section here.
@@ -30,7 +30,7 @@ Every claustra finding in the terminal includes a `Source: <url>` line linking b
 
 **What it checks:** [one sentence, plain English]
 **Severity:** [critical/high/medium/low]
-**Detection:** [AST / module graph / data flow / LLM-refined]
+**Detection:** [AST / module graph / type checker / data flow]
 **Applies to:** [Next.js versions]
 
 ### Why it's a real problem
@@ -268,7 +268,7 @@ export const Counter = ({ onClick, startDateIso }: Props) => (
 **What it checks:** A server component passes sensitive-looking data — props named like `password`/`token`/`secret`, spread props, or whole database query results — across the boundary to a client component.
 
 **Severity:** critical
-**Detection:** TypeScript type checker + LLM refinement (BYOK)
+**Detection:** TypeScript type checker
 **Applies to:** Next.js 13.4+ App Router
 
 ### Why it's a real problem
@@ -316,9 +316,8 @@ export default async function Page() {
 
 ### Known limitations
 
-- Static heuristics catch obvious cases (sensitive prop names, spread props, raw DB types) deterministically
-- The LLM judge (optional, BYOK) refines ambiguous cases by reasoning about whether a type *looks* like it contains sensitive fields
-- Without an API key, this rule still produces useful results from the static heuristics alone
+- Catches deterministic cases: sensitive prop names, spread props, and Prisma/Mongoose query results passed as props without `select`/`omit`
+- A type that doesn't match any of these patterns but still contains private fields (e.g. a manually-typed object) will not be flagged — out of scope for the static check
 
 ---
 
@@ -327,7 +326,7 @@ export default async function Page() {
 **What it checks:** A function with `'use server'` directive uses its parameters in a database write, filesystem write, or external `fetch` call without first passing them through a validation library (Zod, Valibot, Yup, ArkType, TypeBox) or manual type guard.
 
 **Severity:** critical
-**Detection:** forward data-flow analysis + LLM refinement for unknown validators
+**Detection:** forward taint analysis
 **Applies to:** Next.js 13.4+ App Router
 
 ### Why it's a real problem
@@ -385,9 +384,9 @@ export async function updateProfile(formData: FormData) {
 
 ### Known limitations
 
-- Recognizes Zod, Valibot, Yup, ArkType, TypeBox out of the box, plus `next-safe-action` and `zsa` schema patterns
-- For unknown validation function names, falls back to the LLM judge (with API key) or to a "needs review" warning (without)
-- Manual type guards (`if (typeof x !== 'string') throw`) ARE recognized and treated as validation
+- Recognizes Zod (`Schema.parse`/`safeParse`), Valibot (free `parse(schema, value)`), Yup (`validateSync`/`validate`), ArkType (`assert`), TypeBox (`Check`)
+- Unknown validator names produce a false positive — add the helper to your codebase under one of the recognized name patterns or rename to match
+- `JSON.parse`, `Number()`, and similar built-ins are explicitly NOT counted as validators
 
 ---
 

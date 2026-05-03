@@ -185,7 +185,6 @@ export const rule: Rule = {
   description:
     'Detects sensitive prop names, spread props, and whole DB records crossing into Client Components.',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 

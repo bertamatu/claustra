@@ -20,8 +20,6 @@ describe('loadConfig', () => {
     expect(cfg.rules['a01-server-only-in-client']).toBe('error');
     expect(cfg.rules['d02-caching-dynamic']).toBe('warn');
     expect(cfg.extraServerOnlyModules).toEqual([]);
-    expect(cfg.llm.enabled).toBe(true);
-    expect(cfg.llm.model).toBe('claude-haiku-4-5-20251001');
     expect(cfg.ignore).toContain('**/node_modules/**');
   });
 
@@ -44,16 +42,6 @@ describe('loadConfig', () => {
     );
     const cfg = loadConfig(dir);
     expect(cfg.extraServerOnlyModules).toEqual(['@my-org/db', '@my-org/secrets']);
-  });
-
-  it('loads llm overrides', () => {
-    writeFileSync(
-      path.join(dir, '.claustra.json'),
-      JSON.stringify({ llm: { enabled: false, model: 'claude-sonnet-4-6' } }),
-    );
-    const cfg = loadConfig(dir);
-    expect(cfg.llm.enabled).toBe(false);
-    expect(cfg.llm.model).toBe('claude-sonnet-4-6');
   });
 
   it('honours an explicit configPath', () => {

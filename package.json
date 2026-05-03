@@ -53,9 +53,6 @@
     "typescript": "^5.7.0",
     "zod": "^3.24.0"
   },
-  "optionalDependencies": {
-    "@anthropic-ai/sdk": "^0.55.0"
-  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",

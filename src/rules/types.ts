@@ -21,7 +21,6 @@ export type ResolvedConfig = {
   rules: Record<string, 'error' | 'warn' | 'off'>;
   extraServerOnlyModules: string[];
   ignore: string[];
-  llm: { enabled: boolean; model: string };
 };
 
 export type ProjectContext = {
@@ -39,6 +38,5 @@ export type Rule = {
   id: string;
   description: string;
   severity: Severity;
-  needsLlm: boolean;
   run: (ctx: ProjectContext) => Promise<Finding[]>;
 };

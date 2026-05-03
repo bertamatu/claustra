@@ -261,7 +261,6 @@ export const rule: Rule = {
   description:
     'Detects Server Actions that perform DB/FS mutations without a recognized authorization check before the write.',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 

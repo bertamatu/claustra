@@ -39,14 +39,14 @@ describe('claustra CLI (integration)', () => {
   });
 
   it('scans the fixture, surfaces real findings, and exits 1 (default severity threshold)', () => {
-    const { stdout, status } = runCli(FIXTURE, '--no-llm');
+    const { stdout, status } = runCli(FIXTURE);
     expect(status).toBe(1);
     expect(stdout.toLowerCase()).toContain('issue');
     expect(stdout).toContain('a02-rsc-pattern-misuse'.toUpperCase());
   });
 
   it('emits valid JSON when --reporter=json is used', () => {
-    const { stdout, status } = runCli(FIXTURE, '--no-llm', '--reporter', 'json');
+    const { stdout, status } = runCli(FIXTURE, '--reporter', 'json');
     // Status is 1 because the fixture contains real high-severity findings — that's the point.
     expect(status).toBe(1);
     const parsed = JSON.parse(stdout) as { findings: { ruleId: string }[] };
@@ -58,7 +58,6 @@ describe('claustra CLI (integration)', () => {
   it('exits 0 when --severity=critical and only sub-critical rules are enabled', () => {
     const { status } = runCli(
       FIXTURE,
-      '--no-llm',
       '--severity',
       'critical',
       '--rules',
@@ -68,7 +67,7 @@ describe('claustra CLI (integration)', () => {
   });
 
   it('exits with code 2 when given a nonexistent path (no tsconfig)', () => {
-    const { status, stderr } = runCli('/tmp/claustra-nonexistent-path-xyz', '--no-llm');
+    const { status, stderr } = runCli('/tmp/claustra-nonexistent-path-xyz');
     expect(status).toBe(2);
     expect(stderr).toContain('No tsconfig.json found');
   });

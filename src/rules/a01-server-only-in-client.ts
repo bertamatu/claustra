@@ -206,7 +206,6 @@ export const rule: Rule = {
   description:
     'Detects server-only modules and non-public env reads reachable from a "use client" tree via transitive imports.',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 
