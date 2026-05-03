@@ -1,0 +1,631 @@
+# claustra Rules — Source of Truth
+
+> Every rule claustra enforces traces back to an authoritative source: official Next.js documentation, official React documentation, a published security advisory, or widely-adopted community standards. This document is both the spec for rule authors and the trust statement for users.
+
+If a rule cannot point to a real source on this page, it does not ship. No exceptions.
+
+---
+
+## How to read this document
+
+Each rule below has the same structure:
+
+- **What it checks** — plain-English description of the pattern claustra detects
+- **Severity** — critical / high / medium / low
+- **Why it's a real problem** — the actual consequence (data leak, runtime error, security hole)
+- **Authoritative sources** — direct links to the official docs or advisories that establish this as a real concern
+- **Bad example** — minimal code that triggers the rule
+- **Fixed example** — the recommended way to write it
+- **Detection mechanism** — how claustra finds it (AST / module graph / data flow / LLM)
+- **Known limitations** — false positive/negative considerations
+
+Every claustra finding in the terminal includes a `Source: <url>` line linking back to the relevant section here.
+
+---
+
+## Template — for adding new rules in v2+
+
+```markdown
+## [ID] — [Short name]
+
+**What it checks:** [one sentence, plain English]
+**Severity:** [critical/high/medium/low]
+**Detection:** [AST / module graph / data flow / LLM-refined]
+**Applies to:** [Next.js versions]
+
+### Why it's a real problem
+[2-3 sentences on the actual user-facing consequence]
+
+### Authoritative sources
+- [Source title 1](url) — [what part of the doc establishes the rule]
+- [Source title 2](url) — [what part of the doc establishes the rule]
+
+### Bad example
+\`\`\`tsx
+// app/path/to/file.tsx
+[minimal failing code]
+\`\`\`
+
+### Fixed example
+\`\`\`tsx
+// app/path/to/file.tsx
+[corrected code]
+\`\`\`
+
+### Known limitations
+- [false positive case]
+- [false negative case]
+- [version-specific behavior]
+```
+
+---
+
+## A1 — Server-only code reachable from client tree
+
+**What it checks:** A file marked `'use client'` (or any file it transitively imports) reaches a module that should never run in the browser — Node built-ins like `fs`, server-only database clients like `@prisma/client`, or non-public environment variables.
+
+**Severity:** critical
+**Detection:** module graph traversal
+**Applies to:** Next.js 13.4+ App Router, all React frameworks using RSC
+
+### Why it's a real problem
+
+Anything reachable from a `'use client'` file gets bundled into the JavaScript shipped to the browser. If a database client, secret, or filesystem helper makes it across that line, you've leaked it to every visitor's browser. Next.js will sometimes catch this at build time, but not always — particularly when the offending import is conditional, dynamic, or routed through a barrel file.
+
+### Authoritative sources
+
+- [Next.js — Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components) — establishes that `'use client'` declares "a boundary between the Server and Client module graphs," and that "once a file is marked with 'use client', all its imports and child components are considered part of the client bundle"
+- [Next.js — How to Think About Security in Next.js](https://nextjs.org/blog/security-nextjs-server-components-actions) — under "Data Access Layer," recommends verifying that "database packages and environment variables are not imported outside the Data Access Layer"
+- [Next.js — Server-only docs](https://nextjs.org/docs/app/getting-started/server-and-client-components#preventing-environment-poisoning) — describes the `server-only` package as the explicit guardrail this rule enforces statically
+
+### Bad example
+
+```tsx
+// lib/db.ts
+import { PrismaClient } from '@prisma/client';
+export const db = new PrismaClient();
+export const getApiKey = () => process.env.STRIPE_SECRET_KEY;
+
+// components/UserCard.tsx
+'use client';
+import { getApiKey } from '../lib/db'; // ❌ pulls Prisma + secret into client bundle
+export const UserCard = () => <div>{getApiKey()}</div>;
+```
+
+### Fixed example
+
+```tsx
+// lib/db.ts
+import 'server-only';
+import { PrismaClient } from '@prisma/client';
+export const db = new PrismaClient();
+
+// app/users/page.tsx (Server Component)
+import { db } from '@/lib/db';
+import { UserCard } from '@/components/UserCard';
+
+export default async function Page() {
+  const user = await db.user.findFirst();
+  return <UserCard name={user.name} />; // pass only safe data
+}
+
+// components/UserCard.tsx
+'use client';
+export const UserCard = ({ name }: { name: string }) => <div>{name}</div>;
+```
+
+### Known limitations
+
+- Conditional dynamic imports (`if (cond) await import('fs')`) inside a client file aren't always reachable; we flag the worst case
+- Barrel re-exports may show longer import chains than necessary in the output
+- Custom server-only packages can be added via the `extraServerOnlyModules` config option
+
+---
+
+## A2 — RSC pattern misuse
+
+**What it checks:** A `'use client'` file uses server-only APIs (`cookies()`, `headers()`, top-level `await`, `async function Component`), or a server file uses client-only APIs (`useState`, `useEffect`, event handlers on intrinsic elements). Also flags misplaced directives.
+
+**Severity:** high
+**Detection:** AST pattern matching
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+These patterns are explicit errors per the React and Next.js specs. Some throw at build time, others at runtime, and some — like async client components — silently produce broken behavior. Catching them statically saves a debugging session.
+
+### Authoritative sources
+
+- [Next.js — `use client` directive](https://nextjs.org/docs/app/api-reference/directives/use-client) — defines what's allowed in client components and where the directive must appear
+- [Next.js — `use server` directive](https://nextjs.org/docs/app/api-reference/directives/use-server) — defines directive placement rules
+- [Next.js — Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components) — lists the client-only APIs (state, event handlers, lifecycle) and the server-only APIs
+
+### Bad example
+
+```tsx
+// components/Counter.tsx
+'use client';
+import { cookies } from 'next/headers'; // ❌ server-only API in client file
+
+export default function Counter() {
+  const session = cookies().get('session'); // ❌ won't work in browser
+  return <button onClick={() => {}}>+</button>;
+}
+
+// app/dashboard/page.tsx
+import { useState } from 'react'; // ❌ hook in server component
+
+export default function Dashboard() {
+  const [count, setCount] = useState(0); // ❌ runtime error
+  return <button onClick={() => setCount(count + 1)}>{count}</button>; // ❌ event handler
+}
+```
+
+### Fixed example
+
+```tsx
+// components/Counter.tsx
+'use client';
+import { useState } from 'react';
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>{count}</button>;
+}
+
+// app/dashboard/page.tsx (server component)
+import { cookies } from 'next/headers';
+import Counter from '@/components/Counter';
+
+export default async function Dashboard() {
+  const session = (await cookies()).get('session');
+  return (
+    <div>
+      <p>Welcome {session?.value}</p>
+      <Counter />
+    </div>
+  );
+}
+```
+
+### Known limitations
+
+- Some custom hooks can be called in non-render contexts; we only flag clear cases
+- Async server components are valid; we only flag async *client* components
+
+---
+
+## B1 — Non-serializable props from server to client
+
+**What it checks:** A server component passes a function (other than a Server Action), class instance, `Map`, `Set`, `Symbol`, or `BigInt` as a prop to a client component.
+
+**Severity:** high
+**Detection:** TypeScript type checker
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+React must serialize props when crossing the server/client boundary so they can be sent over the network. Non-serializable values either throw at render time or are silently dropped, leading to "why is this prop undefined" debugging sessions.
+
+### Authoritative sources
+
+- [Next.js — `use client` directive: Serializable props](https://nextjs.org/docs/app/api-reference/directives/use-client) — explicitly states "the props of the Client Components must be serializable. This means the props need to be in a format that React can serialize when sending data from the server to the client" and shows the exact `onClick` example as the canonical bad pattern
+- [React — Server Components docs](https://react.dev/reference/rsc/use-client) — defines what's serializable across the wire
+
+### Bad example
+
+```tsx
+// app/page.tsx (server component)
+import { Counter } from './Counter';
+
+export default function Page() {
+  const handleClick = () => console.log('click'); // ❌ function, not serializable
+  return <Counter onClick={handleClick} startDate={new Date()} />;
+}
+
+// app/Counter.tsx
+'use client';
+type Props = { onClick: () => void; startDate: Date };
+export const Counter = ({ onClick, startDate }: Props) => (
+  <button onClick={onClick}>{startDate.toString()}</button>
+);
+```
+
+### Fixed example
+
+```tsx
+// app/actions.ts
+'use server';
+export const logClick = async () => { /* ... */ };
+
+// app/page.tsx (server component)
+import { Counter } from './Counter';
+import { logClick } from './actions';
+
+export default function Page() {
+  return <Counter onClick={logClick} startDateIso={new Date().toISOString()} />;
+}
+
+// app/Counter.tsx
+'use client';
+type Props = { onClick: () => Promise<void>; startDateIso: string };
+export const Counter = ({ onClick, startDateIso }: Props) => (
+  <button onClick={() => onClick()}>{new Date(startDateIso).toString()}</button>
+);
+```
+
+### Known limitations
+
+- Functions defined as Server Actions (with `'use server'`) ARE allowed; we exclude them
+- `children` prop is allowed to contain anything (React handles it)
+- `Promise` is allowed (RSC supports it); we don't flag
+- `Date` is technically serializable but causes hydration drift — emitted as warning, not error
+
+---
+
+## B2 — Server data leakage to client
+
+**What it checks:** A server component passes sensitive-looking data — props named like `password`/`token`/`secret`, spread props, or whole database query results — across the boundary to a client component.
+
+**Severity:** critical
+**Detection:** TypeScript type checker + LLM refinement (BYOK)
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+Anything passed as a prop to a client component ends up in the HTML and JS sent to the browser. If a backend developer passes `<UserProfile user={user} />` and the `user` object includes `passwordHash` or `stripeCustomerId`, those fields are now visible in the page source. This is the most common form of accidental data exposure in App Router apps.
+
+### Authoritative sources
+
+- [Next.js — How to Think About Security in Next.js](https://nextjs.org/blog/security-nextjs-server-components-actions) — under "Auditing": *"`use client` files. Are the Component props expecting private data? Are the type signatures overly broad?"* This rule is the static enforcement of that exact audit step.
+- [Next.js — `use server` directive](https://nextjs.org/docs/app/api-reference/directives/use-server) — *"Server Function return values are serialized and sent to the client. Only return data the UI needs, not raw database records."* This applies equally to Server Component → Client Component prop passing.
+- [Next.js — Data Security guide](https://nextjs.org/docs/app/guides/data-security) — the canonical guide on this concern
+
+### Bad example
+
+```tsx
+// app/profile/page.tsx (server component)
+import { db } from '@/lib/db';
+import { ProfileCard } from './ProfileCard';
+
+export default async function Page() {
+  const user = await db.user.findUnique({ where: { id: '...' } });
+  // ❌ user includes passwordHash, stripeCustomerId, internalNotes, etc.
+  return <ProfileCard user={user} />;
+}
+
+// Worse: spread props
+// return <ProfileCard {...user} />;
+```
+
+### Fixed example
+
+```tsx
+// app/profile/page.tsx (server component)
+import { db } from '@/lib/db';
+import { ProfileCard } from './ProfileCard';
+
+export default async function Page() {
+  const user = await db.user.findUnique({
+    where: { id: '...' },
+    select: { id: true, name: true, avatarUrl: true }, // ✅ only public fields
+  });
+  return <ProfileCard user={user} />;
+}
+```
+
+### Known limitations
+
+- Static heuristics catch obvious cases (sensitive prop names, spread props, raw DB types) deterministically
+- The LLM judge (optional, BYOK) refines ambiguous cases by reasoning about whether a type *looks* like it contains sensitive fields
+- Without an API key, this rule still produces useful results from the static heuristics alone
+
+---
+
+## C1 — Server Actions without input validation
+
+**What it checks:** A function with `'use server'` directive uses its parameters in a database write, filesystem write, or external `fetch` call without first passing them through a validation library (Zod, Valibot, Yup, ArkType, TypeBox) or manual type guard.
+
+**Severity:** critical
+**Detection:** forward data-flow analysis + LLM refinement for unknown validators
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+Server Actions are public HTTP POST endpoints. Anyone can call them with any payload — TypeScript types are erased at runtime and provide no protection. Without validation, an attacker can send arbitrary data to your database. This is the single most common Server Action vulnerability and is directly related to the December 2025 RSC RCE (CVE-2025-55182) class of bugs.
+
+### Authoritative sources
+
+- [Next.js — Data Security guide](https://nextjs.org/docs/app/guides/data-security) — *"You should always validate input from client, as they can be easily modified."* (Verbatim from the official docs.)
+- [Next.js — How to Think About Security in Next.js](https://nextjs.org/blog/security-nextjs-server-components-actions) — *"those functions should always start by validating that the current user is allowed to invoke this action. Functions should also validate the integrity of each argument. This can be done manually or with a tool like zod."*
+- [React — CVE-2025-55182 advisory](https://react.dev/blog/2025/12/03/critical-security-vulnerability-in-react-server-components) — the highest-profile recent example of what unvalidated Server Functions enable
+- [Next.js — Authentication guide](https://nextjs.org/docs/app/guides/authentication) — *"Treat Server Actions with the same security considerations as public-facing API endpoints"*
+
+### Bad example
+
+```tsx
+// app/actions.ts
+'use server';
+import { db } from '@/lib/db';
+
+export async function updateProfile(formData: FormData) {
+  const name = formData.get('name'); // ❌ unknown type, unvalidated
+  const userId = formData.get('userId'); // ❌ attacker-controlled
+  await db.user.update({
+    where: { id: userId as string },
+    data: { name: name as string },
+  });
+}
+```
+
+### Fixed example
+
+```tsx
+// app/actions.ts
+'use server';
+import { z } from 'zod';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+
+const Schema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+export async function updateProfile(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) throw new Error('Unauthorized');
+
+  const data = Schema.parse(Object.fromEntries(formData));
+  await db.user.update({
+    where: { id: session.user.id }, // ✅ from authenticated session, not form
+    data: { name: data.name },
+  });
+}
+```
+
+### Known limitations
+
+- Recognizes Zod, Valibot, Yup, ArkType, TypeBox out of the box, plus `next-safe-action` and `zsa` schema patterns
+- For unknown validation function names, falls back to the LLM judge (with API key) or to a "needs review" warning (without)
+- Manual type guards (`if (typeof x !== 'string') throw`) ARE recognized and treated as validation
+
+---
+
+## C2 — Server Actions without authorization
+
+**What it checks:** A Server Action that performs a mutation (DB write, filesystem write, external API call) does not call any authorization helper (`auth()`, `getServerSession()`, Clerk's `currentUser()`, etc.) before the mutation.
+
+**Severity:** high
+**Detection:** data-flow analysis
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+Like C1, every Server Action is a public HTTP endpoint. Even with input validation, if you don't check *who* is calling, anyone can invoke it. Combined with knowledge of your app's action IDs (visible in the JS bundle), this enables unauthenticated mutations.
+
+### Authoritative sources
+
+- [Next.js — How to Think About Security in Next.js](https://nextjs.org/blog/security-nextjs-server-components-actions) — *"those functions should always start by validating that the current user is allowed to invoke this action"*
+- [Next.js — Authentication guide](https://nextjs.org/docs/app/guides/authentication) — *"Ensure that any Server Actions called from these components also perform their own authorization checks, as client-side UI restrictions alone are not sufficient for security."*
+- [Clerk — Server Actions guide](https://clerk.com/docs/reference/nextjs/app-router/server-actions) — establishes the standard auth pattern across the ecosystem
+
+### Bad example
+
+```tsx
+// app/actions/delete-post.ts
+'use server';
+import { z } from 'zod';
+import { db } from '@/lib/db';
+
+const Schema = z.object({ postId: z.string() });
+
+export async function deletePost(input: unknown) {
+  const { postId } = Schema.parse(input); // ✅ validated
+  await db.post.delete({ where: { id: postId } }); // ❌ no auth check
+}
+```
+
+### Fixed example
+
+```tsx
+// app/actions/delete-post.ts
+'use server';
+import { z } from 'zod';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+
+const Schema = z.object({ postId: z.string() });
+
+export async function deletePost(input: unknown) {
+  const session = await auth();
+  if (!session?.user) throw new Error('Unauthorized');
+
+  const { postId } = Schema.parse(input);
+
+  const post = await db.post.findUnique({ where: { id: postId } });
+  if (post?.authorId !== session.user.id) throw new Error('Forbidden');
+
+  await db.post.delete({ where: { id: postId } });
+}
+```
+
+### Known limitations
+
+- Recognizes NextAuth (`auth`, `getServerSession`), Clerk (`auth`, `currentUser`), Lucia, Better-Auth, plus middleware patterns (`next-safe-action`)
+- Custom auth helpers are recognized via name patterns (`/^(verify|require|check|assert|guard).*?(Auth|Session|User|Permission|Role|Access)/i`)
+- Read-only Server Actions don't require this check; we only flag mutations
+
+---
+
+## D1 — Hydration mismatch risks
+
+**What it checks:** Render-scope expressions that produce different values on server vs client — `Date.now()`, `new Date()` without args, `Math.random()`, browser-only API reads, locale-dependent formatting without an explicit locale.
+
+**Severity:** high
+**Detection:** AST pattern matching
+**Applies to:** all SSR React frameworks (Next.js App Router, Pages Router, Remix, etc.; v1 only ships App Router awareness)
+
+### Why it's a real problem
+
+When the server renders one value (e.g. `Math.random()` returning `0.42`) and the client re-renders a different one, React detects the mismatch during hydration and tears down the entire subtree, falling back to client-only rendering. The user sees a flash of wrong content, performance suffers, and the error is logged in production. The error message is notoriously vague.
+
+### Authoritative sources
+
+- [Next.js — Text content does not match server-rendered HTML](https://nextjs.org/docs/messages/react-hydration-error) — the official error reference page lists `Date()`, `typeof window`, browser APIs, and locale formatting as the canonical causes
+- [React — `hydrateRoot` docs](https://react.dev/reference/react-dom/client/hydrateRoot) — describes hydration mismatches and the consequences
+- [Next.js — Caching documentation](https://nextjs.org/docs/app/getting-started/caching-and-revalidating) — explicitly notes "operations like Math.random(), Date.now(), or crypto.randomUUID() produce different values each time they execute"
+
+### Bad example
+
+```tsx
+// components/Clock.tsx
+'use client';
+
+export const Clock = () => (
+  <div>
+    Current time: {new Date().toLocaleString()} {/* ❌ locale + Date in render */}
+    Session ID: {Math.random()} {/* ❌ different on server vs client */}
+  </div>
+);
+```
+
+### Fixed example
+
+```tsx
+// components/Clock.tsx
+'use client';
+import { useEffect, useState } from 'react';
+
+export const Clock = () => {
+  const [time, setTime] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTime(new Date().toLocaleString('en-US')); // ✅ explicit locale
+    setSessionId(crypto.randomUUID()); // ✅ in effect, runs only on client
+  }, []);
+
+  return (
+    <div>
+      Current time: {time ?? 'Loading...'}
+      Session ID: {sessionId ?? '...'}
+    </div>
+  );
+};
+```
+
+### Known limitations
+
+- Doesn't flag inside `useEffect`, event handlers, or callback props
+- Doesn't flag elements with `suppressHydrationWarning`
+- Does NOT catch external state changes (e.g., a CDN modifying HTML between server and client) — only what's statically visible in your code
+
+---
+
+## D2 — Caching and dynamic rendering surprises
+
+**What it checks:** Routes that use `cookies()`, `headers()`, or other dynamic-forcing APIs while declaring static `revalidate`. `fetch()` calls without explicit cache directives in version-aware contexts. Mismatched `revalidate` between route and fetch.
+
+**Severity:** medium
+**Detection:** AST + version-aware analysis (reads `package.json`)
+**Applies to:** Next.js 13.4+ App Router (behavior differs between Next 14 and 15+)
+
+### Why it's a real problem
+
+Caching defaults changed between Next.js 14 and 15 — Next 14 caches `fetch()` by default, Next 15 does not. Teams upgrading often see stale data or surprise dynamic rendering, blowing up bills on Vercel. Calls to `cookies()` or `headers()` silently force dynamic rendering, which can break ISR expectations.
+
+### Authoritative sources
+
+- [Next.js — Caching docs](https://nextjs.org/docs/app/building-your-application/caching) — *"Dynamic APIs like cookies and headers... will opt a route out of the Full Route Cache, in other words, the route will be dynamically rendered."*
+- [Next.js — `fetch` API reference](https://nextjs.org/docs/app/api-reference/functions/fetch) — defines the per-version default caching behavior
+- [Next.js 15 release notes](https://nextjs.org/blog/next-15) — documents the breaking change in default `fetch` caching
+- [Next.js — `use cache` directive docs](https://nextjs.org/docs/app/api-reference/directives/use-cache) — the new caching model in Next 15+
+
+### Bad example
+
+```tsx
+// app/dashboard/page.tsx
+import { cookies } from 'next/headers';
+
+export const revalidate = 3600; // ❌ declares ISR
+
+export default async function Page() {
+  const session = (await cookies()).get('session'); // ❌ forces dynamic
+  // The `revalidate = 3600` is silently ignored.
+  // Every request renders dynamically. Vercel bill grows.
+  const data = await fetch('https://api.example.com/data'); // ❌ no cache directive
+  // In Next 14: cached by default. In Next 15: not cached. Behavior changes on upgrade.
+
+  return <div>...</div>;
+}
+```
+
+### Fixed example
+
+```tsx
+// app/dashboard/page.tsx
+import { cookies } from 'next/headers';
+import { Suspense } from 'react';
+
+// No `export const revalidate` — this route is dynamic by design.
+
+export default async function Page() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+async function DashboardContent() {
+  const session = (await cookies()).get('session');
+  const data = await fetch('https://api.example.com/data', {
+    cache: 'force-cache',                // ✅ explicit caching intent
+    next: { revalidate: 60 },            // ✅ explicit revalidation
+  });
+  return <div>...</div>;
+}
+```
+
+### Known limitations
+
+- Reads Next.js version from `package.json`; behavior differs between major versions
+- Doesn't flag intentional dynamic rendering (no `revalidate` declared) at error level — only as info
+- Doesn't analyze runtime cache hit/miss behavior, only static patterns
+
+---
+
+## How sources stay current
+
+Documentation, advisories, and best practices in this ecosystem change frequently. To prevent claustra from going stale:
+
+1. **Quarterly review.** Every three months, re-verify each source link still resolves and the cited content is still present.
+2. **Version awareness.** Several rules read the user's `package.json` to apply version-appropriate logic. When Next.js ships a major version, that path needs updating.
+3. **Advisory subscriptions.** Maintainers should subscribe to:
+   - [Next.js blog RSS](https://nextjs.org/feed.xml)
+   - [React blog RSS](https://react.dev/rss.xml)
+   - [GitHub Security Advisories for vercel/next.js](https://github.com/vercel/next.js/security/advisories)
+   - [GitHub Security Advisories for facebook/react](https://github.com/facebook/react/security/advisories)
+4. **CHANGELOG entries.** When a rule's logic changes due to a framework update, the CHANGELOG must cite the framework change that prompted it.
+
+---
+
+## What this document is NOT
+
+- It is not a generic React or Next.js best-practices guide. It only documents what claustra checks.
+- It is not legal or compliance advice. It is engineering guidance backed by framework docs.
+- It is not exhaustive. There are many ways to write buggy Next.js code that claustra does not catch, by design — see "Out of scope" in `CLAUSTRA.md`.
+
+---
+
+## Contribution policy for new rules
+
+Before opening a PR for a new rule:
+
+1. Find at least one *official* source (Next.js docs, React docs, or a CVE) that establishes the pattern as a real concern.
+2. Write the section using the template at the top of this file.
+3. Add at least 5 fixture tests under `tests/fixtures/<rule-id>/` covering both violations and non-violations.
+4. Confirm the rule fits within "Guiding principles" in `CLAUSTRA.md`. If the new rule isn't about the server/client boundary, it likely belongs in a different tool.
+5. Open the PR with a link to the source(s) in the description.
+
+Rules that ship without a section here will be rejected. No exceptions.
