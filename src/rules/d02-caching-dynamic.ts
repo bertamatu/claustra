@@ -239,7 +239,6 @@ export const rule: Rule = {
   description:
     'Detects caching and dynamic-rendering conflicts: dynamic-forcing APIs in static/ISR routes, mismatched revalidate values, fetch to localhost, version-aware fetch defaults.',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 

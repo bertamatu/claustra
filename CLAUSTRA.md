@@ -1,6 +1,6 @@
 # claustra — Project Spec for Claude Code
 
-> A CLI that audits Next.js App Router projects for the 8 ways code or data can unsafely cross the server/client boundary. Static analysis first, optional LLM (BYOK) refines fuzzy cases. Open source, MIT, BYOK, npm-distributed.
+> A CLI that audits Next.js App Router projects for the 8 ways code or data can unsafely cross the server/client boundary. Static analysis only — no network calls, no telemetry. Open source, MIT, npm-distributed.
 
 ---
 
@@ -30,7 +30,7 @@ Three non-negotiable rules that shape every decision:
 
 1. **One framework, one paradigm.** Next.js App Router + RSC. Not Pages Router, not Remix, not vanilla React. Specificity is the pitch.
 2. **One concern: the server/client boundary.** Every check must relate to "what happens when code or data crosses from server to client." If a check doesn't, it goes in a different tool.
-3. **Static-first, LLM-optional.** Every rule must produce useful output without an API key. The LLM only refines fuzzy cases.
+3. **Static-only, fully local.** Every rule runs against the local TypeScript program. No network calls, no API keys, no third-party services in the runtime path.
 
 If a proposed feature doesn't fit all three, it's out of scope or a v2+ consideration.
 
@@ -41,7 +41,7 @@ If a proposed feature doesn't fit all three, it's out of scope or a v2+ consider
 ### Category A — Boundary integrity
 
 #### A1: Server-only code reachable from client tree
-**Severity:** critical · **Mechanism:** module graph · **LLM:** no
+**Severity:** critical · **Mechanism:** module graph
 
 Build a transitive import graph from every `'use client'` file. Flag any reached module that:
 - Imports `node:fs`, `node:path`, `node:crypto`, `node:child_process`, `node:net`, `node:dns`
@@ -53,7 +53,7 @@ Output: full import chain (`ClientComponent.tsx → utils/db.ts → @prisma/clie
 Allow extension via `extraServerOnlyModules` in config.
 
 #### A2: RSC pattern misuse
-**Severity:** high · **Mechanism:** AST · **LLM:** no
+**Severity:** high · **Mechanism:** AST
 
 In `'use client'` files, flag:
 - `async function Component()` returning JSX
@@ -73,7 +73,7 @@ Directive placement:
 ### Category B — Data crossing the boundary
 
 #### B1: Non-serializable props from server to client
-**Severity:** high · **Mechanism:** type checker · **LLM:** no
+**Severity:** high · **Mechanism:** type checker
 
 Find every JSX element where the component is defined in a `'use client'` file. For each prop:
 - Resolve the type via the TS checker
@@ -85,25 +85,20 @@ Find every JSX element where the component is defined in a `'use client'` file. 
 
 Edge cases:
 - `children` is allowed to be anything
-- Spread props (`<Client {...obj} />`) emit a "needs-llm" finding (handled by B2)
+- Spread props (`<Client {...obj} />`) are handled by B2
 - `Promise` is allowed (RSC supports it)
 
 #### B2: Server data leakage to client
-**Severity:** critical · **Mechanism:** type checker + LLM · **LLM:** yes
+**Severity:** critical · **Mechanism:** type checker
 
-Static pass:
 - Flag prop names matching `/^(secret|token|password|apiKey|privateKey|hash|salt|sessionId|stripeSecret|jwt)/i` crossing the boundary
 - Flag spread props crossing the boundary
-- Flag passing the entire result of a Prisma/Drizzle/Mongoose query (recognized via type names) without explicit destructuring or `select:`/`omit:`
-
-LLM pass (optional, BYOK):
-- For each cross-boundary prop where static analysis is uncertain, ask the judge:
-  > "Below is the type of a prop being passed from a Server Component to a Client Component in a Next.js app. Identify any fields that are likely sensitive (auth tokens, password hashes, internal IDs not meant for users, PII beyond what UI needs). Respond as JSON: `{ risky: boolean, fields: string[], reasoning: string }`."
+- Flag passing the entire result of a Prisma/Mongoose query (recognized via call methods like `findUnique`/`findFirst`/`findOne`) without explicit `select:`/`omit:` or destructuring
 
 ### Category C — Server Action safety
 
 #### C1: Server Actions without input validation
-**Severity:** critical · **Mechanism:** data-flow + LLM · **LLM:** confirms unknown validators
+**Severity:** critical · **Mechanism:** forward taint analysis
 
 Find every function with `'use server'` directive (file-level or inline). For each Server Action's parameters, do a forward data-flow analysis:
 - Mark parameters as TAINTED
@@ -116,10 +111,8 @@ Flag if TAINTED data reaches:
 - `fetch()` to an external URL (TAINTED in URL or body)
 - `revalidatePath`/`revalidateTag` with TAINTED input (open redirect / cache poisoning)
 
-LLM fallback: for unknown validation function names, ask the judge "is this function call performing input validation?"
-
 #### C2: Server Actions without authorization
-**Severity:** high · **Mechanism:** data-flow · **LLM:** no
+**Severity:** high · **Mechanism:** data-flow
 
 For every Server Action that performs a mutation (writes to DB, filesystem, calls external API), check whether an authorization call appears before the mutation in the same function (or any function it transitively calls):
 - `auth()`, `getServerSession()`, `getServerAuthSession()`
@@ -133,7 +126,7 @@ Flag if mutation occurs without any of the above.
 ### Category D — Rendering correctness
 
 #### D1: Hydration mismatch risks
-**Severity:** high · **Mechanism:** AST · **LLM:** no
+**Severity:** high · **Mechanism:** AST
 
 In any component (server or client), flag expressions in render scope (not inside `useEffect`, event handlers, `useMemo`, or callback props):
 - `Date.now()`, `new Date()` (no args), `performance.now()`
@@ -148,7 +141,7 @@ Don't flag if:
 - Inside an event handler (`onClick`, etc.) or callback prop
 
 #### D2: Caching and dynamic rendering surprises
-**Severity:** medium · **Mechanism:** AST + version-aware · **LLM:** no
+**Severity:** medium · **Mechanism:** AST + version-aware
 
 Read Next.js version from `package.json`:
 - Next 14: `fetch` defaults to `force-cache`; flag if user expects fresh data without `cache: 'no-store'`
@@ -212,8 +205,7 @@ Document these in `ROADMAP.md` once the repo is up. Do not start them until v1.0
 - **Parsing & types:**
   - `typescript` (compiler API) for module graph + type checking
   - `@typescript-eslint/typescript-estree` only if needed for AST work outside the program
-- **Schema validation:** `zod` (used internally for LLM JSON outputs and config parsing)
-- **LLM (optional, BYOK):** `@anthropic-ai/sdk`, lazy-loaded only if `ANTHROPIC_API_KEY` is set
+- **Schema validation:** `zod` (config parsing)
 - **Tests:** `vitest`, fixture-based
 - **CI:** GitHub Actions (lint + test + build matrix on Node 20/22)
 
@@ -236,8 +228,7 @@ claustra/
 ├── ROADMAP.md
 ├── CONTRIBUTING.md
 ├── LICENSE                            # MIT
-├── .env.example                       # ANTHROPIC_API_KEY=
-├── .gitignore                         # node_modules, dist, .env, .cache
+├── .gitignore                         # node_modules, dist, .cache
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml
@@ -266,10 +257,6 @@ claustra/
 │   │   ├── c02-unauthorized-server-actions.ts
 │   │   ├── d01-hydration-risks.ts
 │   │   └── d02-caching-dynamic.ts
-│   ├── llm/
-│   │   ├── client.ts                  # Anthropic wrapper, lazy-loaded
-│   │   ├── cache.ts                   # disk cache: hash → judge result
-│   │   └── judges.ts                  # one judge fn per fuzzy rule
 │   ├── reporters/
 │   │   ├── terminal.ts
 │   │   ├── json.ts
@@ -332,7 +319,6 @@ export type Rule = {
   id: string;
   description: string;
   severity: Severity;
-  needsLlm: boolean;
   run: (ctx: ProjectContext) => Promise<Finding[]>;
 };
 
@@ -340,7 +326,6 @@ export type ResolvedConfig = {
   rules: Record<string, 'error' | 'warn' | 'off'>;
   extraServerOnlyModules: string[];
   ignore: string[];
-  llm: { enabled: boolean; model: string };
 };
 ```
 
@@ -354,8 +339,6 @@ npx claustra [path]                            # scan, default cwd
   --reporter <terminal|json|github>            # default terminal
   --severity <critical|high|medium|low>        # min severity to fail (default high)
   --rules <a01,b02,...>                        # run subset
-  --no-llm                                     # skip LLM judges
-  --model <name>                               # override Claude model
   --json-output <path>                         # write findings to file
   --version
   --help
@@ -383,11 +366,7 @@ Exit codes:
     "d02-caching-dynamic": "warn"
   },
   "extraServerOnlyModules": [],
-  "ignore": ["**/*.test.tsx", "**/*.test.ts", "**/__fixtures__/**", "**/node_modules/**"],
-  "llm": {
-    "enabled": true,
-    "model": "claude-haiku-4-5-20251001"
-  }
+  "ignore": ["**/*.test.tsx", "**/*.test.ts", "**/__fixtures__/**", "**/node_modules/**"]
 }
 ```
 
@@ -402,23 +381,9 @@ Exit codes:
 5. Build module graph (`scanner/module-graph.ts`)
 6. Build boundary map (`scanner/boundary.ts`)
 7. Run enabled rules in parallel (`rules/*`)
-8. Collect "needs-llm" findings
-9. If `ANTHROPIC_API_KEY` present and `--no-llm` not set: run LLM judges with disk cache + batching
-10. Merge results, sort by severity, then file, then line
-11. Format via chosen reporter
-12. Exit with appropriate code
-
----
-
-## LLM judge protocol
-
-- Loaded only if `ANTHROPIC_API_KEY` is set AND `llm.enabled` is true AND `--no-llm` is not passed
-- Default model: `claude-haiku-4-5-20251001` (cheap, fast); override via `--model`
-- All calls go through `llm/client.ts`
-- All results cached on disk at `node_modules/.cache/claustra/` keyed by SHA-256 of `(rule_id, file_content, snippet_range)`
-- Re-runs on unchanged code = zero API cost
-- Findings flagged "needs-llm" are batched into a single `messages.create` call per rule
-- All judge outputs validated with Zod before use; on validation failure, fall back to "static-only" result
+8. Merge results, sort by severity, then file, then line
+9. Format via chosen reporter
+10. Exit with appropriate code
 
 ---
 
@@ -514,17 +479,15 @@ Run with --reporter=json for machine-readable output.
 - Implement C2 (no authorization in mutations)
 - Release as v0.3.0
 
-### Milestone 5 — Data-flow + LLM (4 days)
-- Implement C1 (forward data-flow for input validation)
-- Implement B2 (data leakage, with LLM refinement)
-- Implement `src/llm/*` (client, cache, judges)
-- BYOK setup documented in README
+### Milestone 5 — Data-flow rules (4 days)
+- Implement C1 (forward taint analysis for input validation)
+- Implement B2 (server data leakage)
 - Release as v0.4.0
 
 ### Milestone 6 — Polish to v1.0 (2 days)
 - GitHub Actions reporter (`@actions/core` annotations)
 - JSON reporter for CI
-- README with: badges, demo GIF, install snippet, full rule reference, BYOK setup, GitHub Action usage, comparison table to alternatives
+- README with: badges, demo GIF, install snippet, full rule reference, GitHub Action usage, comparison table to alternatives
 - ROADMAP.md with v2+ items
 - **Publish v1.0.0**
 
@@ -532,12 +495,10 @@ Run with --reporter=json for machine-readable output.
 
 ## Performance budget
 
-Scanning a 500-file Next.js repo, no LLM:
+Scanning a 500-file Next.js repo:
 - Module-graph build: ≤ 3 s
-- All static rules: ≤ 5 s
+- All rules: ≤ 5 s
 - Total: ≤ 10 s on a 2024-era laptop
-
-LLM mode adds latency proportional to fuzzy-finding count. Cache hits add ≤ 50 ms.
 
 ---
 
@@ -559,7 +520,7 @@ No mocking the TS compiler. Build a real `Program` from each fixture. Slower but
 - All 8 rules implemented with ≥5 fixtures each
 - `npx claustra` works on a fresh clone of a public Next.js 14/15/16 App Router project with zero config
 - Documented `.claustra.json` schema
-- README with: install, screenshot, full rule reference, BYOK setup, GitHub Action snippet, comparison to alternatives
+- README with: install, screenshot, full rule reference, GitHub Action snippet, comparison to alternatives
 - Published to npm as `claustra`
 - 30-second demo GIF in README catching at least one critical bug
 - CI green on Node 20 and 22
@@ -570,7 +531,7 @@ No mocking the TS compiler. Build a real `Program` from each fixture. Slower but
 
 - Don't add a 9th rule before v1.0 ships
 - Don't accept feature PRs that violate guiding principles
-- Don't add hosted-service language anywhere ("free forever, BYOK, runs locally" is the story)
+- Don't add hosted-service language anywhere ("free forever, runs locally, no network calls" is the story)
 - Don't add telemetry "to understand usage" — privacy is a key differentiator
 - Don't depend on ESLint at runtime (we may ship an ESLint plugin in v2 as a *thin wrapper*, but the core stays standalone)
 - Don't add Pages Router support — that dilutes focus and confuses users about what claustra is

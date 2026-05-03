@@ -23,24 +23,17 @@ program
   .option('--reporter <type>', 'output format: terminal | json | github', 'terminal')
   .option('--severity <level>', 'minimum severity to fail: critical | high | medium | low', 'high')
   .option('--rules <ids>', 'comma-separated rule IDs to run (e.g. a01,d01)')
-  .option('--no-llm', 'skip LLM judges even if ANTHROPIC_API_KEY is set')
-  .option('--model <name>', 'override Claude model for LLM judges')
   .option('--json-output <path>', 'write findings JSON to a file')
   .action(async (scanPath: string, opts: {
     config?: string;
     reporter: string;
     severity: string;
     rules?: string;
-    llm: boolean;
-    model?: string;
     jsonOutput?: string;
   }) => {
     try {
       const rootDir = path.resolve(scanPath);
       const config = loadConfig(rootDir, opts.config);
-
-      if (opts.model) config.llm.model = opts.model;
-      if (!opts.llm) config.llm.enabled = false;
 
       if (opts.rules) {
         const allowedIds = new Set(opts.rules.split(',').map((r) => r.trim()));

@@ -277,7 +277,6 @@ export const rule: Rule = {
   description:
     'Detects non-serializable props (functions, class instances, Map/Set, Symbol, BigInt, Date) crossing into Client Components.',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 

@@ -1,8 +1,8 @@
 # claustra
 
-> A CLI that audits Next.js App Router projects for the ways code or data can unsafely cross the server/client boundary. Static analysis, BYOK LLM optional, runs entirely locally.
+> A CLI that audits Next.js App Router projects for the ways code or data can unsafely cross the server/client boundary. Static analysis only — no network calls, no telemetry, runs entirely on your machine.
 
-**v0.4.0 — release candidate.** All eight rules live as static checks (A1, A2, B1, B2, C1, C2, D1, D2). LLM refinement and v1.0 polish (GitHub Action, demo, badges) come next; see [`ROADMAP.md`](./ROADMAP.md) and [`CLAUSTRA.md`](./CLAUSTRA.md).
+**v0.4.0 — release candidate.** All eight rules live as static checks (A1, A2, B1, B2, C1, C2, D1, D2). v1.0 polish (GitHub Action snippet, demo, badges) is the only thing left; see [`ROADMAP.md`](./ROADMAP.md) and [`CLAUSTRA.md`](./CLAUSTRA.md).
 
 ## Install & run
 
@@ -36,7 +36,6 @@ Each finding includes the rule ID, file:line, a one-line summary, an explanation
 
 ## Coming before v1.0
 
-- **LLM judges** for B2 (ambiguous prop types) and C1 (unknown validator names) — opt-in via `ANTHROPIC_API_KEY`
 - **GitHub Action** README snippet, demo GIF, badges
 
 ## CLI
@@ -47,16 +46,10 @@ npx claustra [path]                       # scan, default cwd
   --reporter <terminal|json|github>       # default terminal
   --severity <critical|high|medium|low>   # min severity to fail (default high)
   --rules <a02,d01,...>                   # run subset
-  --no-llm                                # skip LLM judges
-  --model <name>                          # override Claude model
   --json-output <path>                    # write findings to file
 ```
 
 Exit codes: `0` (no findings at/above threshold), `1` (findings at/above threshold), `2` (internal error).
-
-## Optional LLM (BYOK)
-
-Set `ANTHROPIC_API_KEY` to enable LLM refinement once it's wired into B2 and C1 (the v0.4.0 rules ship purely static — the LLM passes activate ambiguous-case escalation). claustra never sends source unprompted; calls are cached on disk by content hash, so re-runs on unchanged code are free. Default model: `claude-haiku-4-5-20251001`.
 
 ## License
 

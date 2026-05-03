@@ -419,7 +419,6 @@ export const rule: Rule = {
   description:
     'Detects Server Actions whose parameters reach DB/FS writes, fetch(), or revalidatePath/Tag without passing through a recognized validator (Zod, Valibot, Yup, ArkType, TypeBox).',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 

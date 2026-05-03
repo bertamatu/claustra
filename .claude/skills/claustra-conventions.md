@@ -9,11 +9,10 @@ This skill encodes *how* to write code in this repo. CLAUSTRA.md says *what* to 
 
 ## Source of truth
 
-When the three docs disagree, the priority is:
+When the two docs disagree, the priority is:
 
 1. **CLAUSTRA.md** — locked types, CLI surface, milestones, scope
 2. **RULES.md** — rule semantics and authoritative sources (every rule must cite official Next.js/React docs or a CVE)
-3. **ARCHITECTURE.md** — early brainstorm, uses old name "next-guard" and rule IDs `r01`-`r08`. Use only for cross-reference; **always use CLAUSTRA.md naming** (`a01`/`a02`/`b01`/`b02`/`c01`/`c02`/`d01`/`d02`).
 
 ## Code style
 
@@ -32,7 +31,6 @@ These are enforced by `eslint.config.js`. Read it before adjusting any of these.
 - **No global state.** Everything that varies between runs flows through `ProjectContext`.
 - **`src/utils/`** is for pure helpers reused across rules/scanner. No I/O at module load.
 - **`src/scanner/`** owns the TS Program, module graph, and boundary classifier. Rules consume; they don't construct.
-- **`src/llm/`** is lazy — no Anthropic SDK is imported until `getLlmClient()` is called.
 - **`src/reporters/`** are sinks — they take `Finding[]` and emit. They never compute findings.
 
 ## Rule template
@@ -50,7 +48,6 @@ export const rule: Rule = {
   id: 'a02-rsc-pattern-misuse',
   description: 'Detects ...',
   severity: 'high',
-  needsLlm: false,
   run,
 };
 
@@ -67,7 +64,7 @@ After creating the file, register it in `src/rules/index.ts`.
 - **No mocking modules under test** unless absolutely necessary. If you find yourself reaching for `vi.mock`, consider whether the code under test should be refactored to take a dependency as an argument.
 - **Coverage thresholds** (in `vitest.config.ts`) are 80% lines/functions/statements, 75% branches. Don't chase 100% — aim for every meaningful branch + a real integration test.
 - **CLI argument logic** is covered by `tests/cli.integration.test.ts` (subprocess-based), not by unit-mocking commander. Add cases there when CLI behavior changes.
-- **Excluded from coverage** (with reason): `cli.ts` (covered by integration), `judges.ts` (needs Anthropic mock infra), `types.ts` (no runtime), `rules/index.ts` (placeholder).
+- **Excluded from coverage** (with reason): `cli.ts` (covered by integration), `types.ts` (no runtime), `rules/index.ts` (placeholder).
 
 ### When to write a test
 
@@ -79,21 +76,13 @@ After creating the file, register it in `src/rules/index.ts`.
 
 Default to writing none. Add one only when the *why* is non-obvious — a hidden constraint, a workaround, a subtle invariant. Don't restate what the code does. Don't reference the current task or PR (`// added for X`, `// fixes Y`) — that belongs in the commit message.
 
-## LLM judges
-
-- Always behind an env-key gate (`ANTHROPIC_API_KEY`). Code must produce useful results without it.
-- Always cached on disk (`node_modules/.cache/claustra/`) keyed by SHA-256 of `(rule_id, file_content, snippet_range)`.
-- Output validated with Zod before use. On validation failure, fall back to the static result.
-- Default model: `claude-haiku-4-5-20251001`. Override via `--model` flag.
-
 ## Performance
 
 - **Module graph build ≤ 3s** on a 500-file repo
-- **All static rules ≤ 5s** on a 500-file repo
+- **All rules ≤ 5s** on a 500-file repo
 - **Total ≤ 10s** on a 2024-era laptop
-- LLM mode: cache hit ≤ 50ms
 
-If a rule's static pass exceeds these, profile before adding more checks. Don't pre-optimize.
+If a rule exceeds these, profile before adding more checks. Don't pre-optimize.
 
 ## Commits
 

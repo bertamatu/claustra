@@ -25,12 +25,6 @@ const ConfigSchema = z.object({
       '**/__fixtures__/**',
       '**/node_modules/**',
     ]),
-  llm: z
-    .object({
-      enabled: z.boolean().default(true),
-      model: z.string().default('claude-haiku-4-5-20251001'),
-    })
-    .default({}),
 });
 
 export const loadConfig = (
