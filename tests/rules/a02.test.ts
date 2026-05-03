@@ -14,7 +14,6 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   rules: {},
   extraServerOnlyModules: [],
   ignore: [],
-  llm: { enabled: false, model: '' },
 };
 
 describe('a02 — RSC pattern misuse', () => {

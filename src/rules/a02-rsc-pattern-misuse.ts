@@ -256,7 +256,6 @@ export const rule: Rule = {
   description:
     'Detects RSC pattern misuse: server APIs in client files, client APIs in server files, and misplaced directives.',
   severity: SEVERITY,
-  needsLlm: false,
   run,
 };
 
