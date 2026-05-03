@@ -1,6 +1,6 @@
 {
   "name": "claustra",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Audits Next.js App Router projects for server/client boundary violations.",
   "license": "MIT",
   "author": "Berta <berta.codes@gmail.com>",
