@@ -30,10 +30,18 @@ Every Server Action (a function with `'use server'`) is a public HTTP POST endpo
 
 ## See it in action
 
-Here's a real bug pattern claustra catches. Suppose you have a Server Component that loads a user from your database and passes it to a Client Component for display:
+Here's a real bug pattern claustra catches. Suppose you have a Client Component for display:
 
 ```tsx
-// app/profile/page.tsx  (Server Component)
+// app/profile/ProfileCard.tsx
+'use client';
+export const ProfileCard = ({ user }: { user: unknown }) => <div>{/* ... */}</div>;
+```
+
+…and a Server Component that loads a user from your database and renders it:
+
+```tsx
+// app/profile/page.tsx  (Server Component, no 'use client')
 import { db } from '@/lib/db';
 import { ProfileCard } from './ProfileCard';
 
@@ -43,18 +51,18 @@ export default async function Page() {
 }
 ```
 
-Looks innocent. The problem: `db.user.findUnique` returns *every column on the row* — including `passwordHash`, `stripeCustomerId`, internal notes, anything else schema decides to add later. All of it gets serialized into the page HTML and into the JavaScript bundle the browser downloads. Anyone can View Source.
+Looks innocent. The problem: `db.user.findUnique` returns *every column on the row* — including `passwordHash`, `stripeCustomerId`, internal notes, anything else the schema decides to add later. All of it gets serialized into the page HTML and into the JavaScript bundle the browser downloads. Anyone can View Source.
 
 Run `npx claustra .` and you get:
 
 ```
 claustra found 1 issue in 1 file
 
-  ✖ critical  app/profile/page.tsx:6
+  ✖ critical  app/profile/page.tsx:7
     B02-SERVER-DATA-LEAKAGE — Whole DB record passed as prop "user" to a Client Component
-    The value of this prop comes directly from a Prisma query that did not
-    specify a `select` or `omit`. The full row — including any private columns
-    — is serialized into the page HTML and JS.
+    The value of this prop comes directly from a Prisma/Mongoose query that did
+    not specify a `select` or `omit`. The full row — including any private
+    columns — is serialized into the page HTML and JS.
     → Add `select: { ... }` (or `omit: {...}`) to the query so only the fields
       the UI needs cross the boundary, or destructure the safe fields explicitly.
 
@@ -95,7 +103,7 @@ From inside your Next.js project root:
 npx claustra .
 ```
 
-The first run downloads claustra (~74 KB), the second run is instant. No install step, no config file, no flags required.
+The first run downloads claustra and its TypeScript runtime dependency (a few MB total, since claustra uses the real TS compiler API for module resolution and type-checking). Subsequent runs of the same version are cached and start in under a second. No install step, no config file, no flags required.
 
 ### 3. Read the output
 
@@ -104,7 +112,7 @@ Each finding tells you four things:
 | Part | Example | What it means |
 |---|---|---|
 | **Severity** | `✖ critical` | How bad. critical → fix today. high → before merge. medium → when you can. |
-| **Location** | `app/profile/page.tsx:6` | The exact file and line, click-through in most terminals. |
+| **Location** | `app/profile/page.tsx:7` | The exact file and line, click-through in most terminals. |
 | **What & why** | `B02 — Whole DB record passed as prop "user"` | The rule + a one-line explanation of why this is a bug. |
 | **How to fix** | `→ Add select: { ... } to the query` | A concrete, actionable suggestion. |
 
@@ -181,10 +189,10 @@ claustra is meant to run **alongside** `eslint-config-next` and TypeScript, not 
 No. Zero network calls during a scan. No telemetry. No API keys. The only files it reads are inside the project you point it at; the only output is the findings on stdout (or wherever `--json-output` writes). Run it on the most private codebase you have.
 
 **Does it work with Pages Router?**
-No — App Router only. Pages Router has different boundary semantics, and trying to support both would dilute every rule. Mixed-router projects work for the App Router files; Pages Router files are silently skipped.
+App Router only — that's where the rules are tuned. Pages Router files in a mixed-router project will still be scanned (they're part of the same TypeScript program) and a few rules like D1 (hydration) will still fire on them, but the rules aren't tailored to that paradigm — expect occasional false positives. If your codebase is Pages-Router-only, claustra isn't the right tool.
 
 **How long does a scan take?**
-About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra itself (~74 KB), which takes another second or two. CI runs are network-bound for the install, scan-bound for the rest.
+About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency (a few MB), which takes a few extra seconds. CI runs are network-bound for the install, scan-bound for the rest.
 
 **What about false positives?**
 Each rule has fixture-based tests (about 190 total across all 8 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction — that's exactly the feedback loop that improves the rules.
@@ -238,7 +246,7 @@ npx claustra [path]                          # scan, default cwd
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE). Use it on any codebase, public or private. Modify it. Bundle it. No attribution required (though stars are welcome).
+MIT — see [`LICENSE`](./LICENSE). Use it on any codebase, public or private. Modify it. Bundle it (keep the LICENSE file when you redistribute). Stars are welcome but never required.
 
 ## Documentation
 
