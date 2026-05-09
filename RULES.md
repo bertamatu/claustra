@@ -1006,6 +1006,78 @@ async function DashboardContent() {
 
 ---
 
+## D3 — `'use cache'` function reads request-scoped data
+
+**What it checks:** A function or file marked with the `'use cache'` directive reads request-scoped state from inside the cached scope — `cookies()` / `headers()` / `draftMode()` from `next/headers`, a recognized auth helper (`auth()`, `currentUser()`, `validateRequest()`, `verify*Auth`/`require*Session`/etc.), or a `request`/`req` parameter's `.headers` / `.cookies` / `.url` / `.nextUrl`.
+
+**Severity:** critical
+**Detection:** AST walk with a `cached` flag carried through the recursion. Set true when the source file's directive prologue contains `'use cache'`, set true when entering a function whose body's directive prologue contains `'use cache'`. Calls and member accesses inside the cached scope are classified against the rule's known-bad sets. `next/headers` imports are tracked to identify the local binding for `cookies` / `headers` / `draftMode`. Auth helpers are matched by name — same set as C2.
+**Applies to:** Next.js 16 stable. Skipped on Next.js 15 and below (`'use cache'` was only available in 15 behind the experimental `cacheComponents` flag).
+
+### Why it's a real problem
+
+`'use cache'` produces a memoized result keyed on the cached function's arguments. A request that hits a populated cache entry receives the *exact* return value computed by an earlier request — including any per-request data the cached function read internally. If that data is the current user's session cookie, the auth helper's resolved user object, or anything else that should differ from request to request, every subsequent request that hits the same cache key now reads the *first* user's data. This is not a "weird performance bug": it is one user being served as another user, the same severity class as a session-fixation or auth-bypass vulnerability.
+
+The fix is an inversion: read the request-scoped value in the *caller* (a Route Handler, Server Action, or non-cached Server Component), then pass the resolved primitive (a user id, a role, a region string) into the cached function as an argument. That argument becomes part of the cache key, so each variant gets its own cache entry, and no two users share state.
+
+### Authoritative sources
+
+- [Next.js — `'use cache'` directive reference](https://nextjs.org/docs/app/api-reference/directives/use-cache) — describes the directive, what it caches, and the rule that cached functions cannot read request-time data.
+- [Next.js — Caching in Next.js 16](https://nextjs.org/docs/app/getting-started/caching) — the wider caching model under which `'use cache'` operates, including `cacheLife` / `cacheTag` / `revalidateTag`.
+- [Next.js — `cookies()` and `headers()` are dynamic APIs](https://nextjs.org/docs/app/api-reference/functions/cookies) — confirms these functions opt their caller into dynamic rendering and are not legal inside cached scopes.
+
+### Bad example
+
+```ts
+// app/lib/cart.ts
+import { cookies } from 'next/headers';
+
+export const getCart = async () => {
+  'use cache';
+  const store = await cookies();        // ❌ poisons the cache with one user's session
+  const sid = store.get('session')?.value;
+  return loadCartFor(sid);
+};
+```
+
+```ts
+// app/lib/dashboard.ts
+import { auth } from '@/auth';
+
+export const getDashboard = async () => {
+  'use cache';
+  const session = await auth();         // ❌ caches one user's identity for everyone
+  return loadDashboardFor(session?.user?.id);
+};
+```
+
+### Fixed example
+
+```ts
+// app/lib/cart.ts — request-scoped read happens in the caller
+const fetchCartForSession = async (sessionId: string) => {
+  'use cache';
+  return loadCartFor(sessionId);          // ✅ sessionId is part of the cache key
+};
+
+// app/page.tsx
+import { cookies } from 'next/headers';
+export default async function Page() {
+  const sid = (await cookies()).get('session')?.value ?? '';
+  return <Cart data={await fetchCartForSession(sid)} />;
+}
+```
+
+### Known limitations
+
+- Inter-procedural calls are not chased. A cached function that calls a helper which itself calls `cookies()` won't be flagged; the call site of the helper will appear safe to this rule.
+- The `request`/`req` parameter check is name-based. Other parameter names (`incomingRequest`, `r`) won't be picked up. Custom convention coverage is intentional — the goal is to catch the obvious shape, not boil the ocean.
+- The `use` keyword in the directive is matched literally on the string `'use cache'`. Variants like `'use cache: profile'` (Next.js cache profiles) are not yet recognized; treat as a future enhancement.
+- Auth-helper detection is by call-name match (`KNOWN_AUTH_NAMES` + `verify*Auth`-style regex). A wrapping helper called `loadDashboardData` that internally calls `auth()` won't be flagged at the wrapper site — same inter-procedural limitation as above.
+- Skipped on Next.js 15 and below. Projects using the Next.js 15 experimental `cacheComponents` flag with `'use cache'` are not covered until they upgrade to 16.
+
+---
+
 ## How sources stay current
 
 Documentation, advisories, and best practices in this ecosystem change frequently. To prevent claustra from going stale:

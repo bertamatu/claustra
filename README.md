@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
 
-> **Catches the fourteen ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, expose unauthenticated database writes, leave routes publicly accessible behind a `middleware.ts` that doesn't actually cover them, or render pages with empty `params` after the Next.js 15 Promise migration.** Pure static analysis, no network calls, no API keys, no telemetry - runs entirely on your machine in a few seconds.
+> **Catches the fifteen ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, expose unauthenticated database writes, leave routes publicly accessible behind a `middleware.ts` that doesn't actually cover them, render pages with empty `params` after the Next.js 15 Promise migration, or leak one user's session through a `'use cache'` function that read request-scoped state.** Pure static analysis, no network calls, no API keys, no telemetry - runs entirely on your machine in a few seconds.
 
 ---
 
@@ -153,7 +153,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Fourteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Fifteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** - Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -176,6 +176,7 @@ Fourteen rules across four categories. Each one cites authoritative Next.js / Re
 **Rendering correctness (D)**
 - **D1** - Hydration mismatch risks: `Date`, `Math.random()`, browser globals in render scope, locale formatters without explicit locale.
 - **D2** - Caching & dynamic-rendering surprises: Next.js 14 ↔ 15 default-`fetch` behavior, `cookies()`/`headers()` in statically-cached routes, ISR mismatches.
+- **D3** - `'use cache'` functions that read request-scoped state (`cookies()` / `headers()` / `draftMode()`, auth helpers, `request.headers`/`cookies`/`url`). Reads the directive at file-prologue or function-body level. Recognizes the inversion pattern (caller resolves the request-scoped value, passes a primitive to the cached function). Skipped on Next.js 15 and earlier.
 
 ---
 
@@ -214,7 +215,7 @@ App Router only - that's where the rules are tuned. Pages Router files in a mixe
 About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency (a few MB), which takes a few extra seconds. CI runs are network-bound for the install, scan-bound for the rest.
 
 **What about false positives?**
-Each rule has fixture-based tests (306 total across all 14 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
+Each rule has fixture-based tests (318 total across all 15 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
 
 **Do I need to install anything besides `npx claustra`?**
 Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.
