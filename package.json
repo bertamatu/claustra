@@ -1,9 +1,9 @@
 {
   "name": "claustra",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Audits Next.js App Router projects for server/client boundary violations.",
   "license": "MIT",
-  "author": "Berta <berta.codes@gmail.com>",
+  "author": "Berta Matuliauskiene <berta.codes@gmail.com>",
   "repository": {
     "type": "git",
     "url": "https://github.com/bertamatu/claustra.git"
