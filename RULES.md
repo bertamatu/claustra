@@ -660,6 +660,65 @@ export async function POST(request: Request) {
 
 ---
 
+## C4 — Route Handler fetches user-controlled URL without allowlist
+
+**What it checks:** A Next.js Route Handler (`route.ts`/`route.js`) where a value derived from the request — `request.url`, `request.nextUrl.*`, `URL(request.url).searchParams.get(...)`, or the second-arg `params` object for dynamic segments — flows into a server-side outbound-request sink (`fetch`, `axios`/`got` and their `.get`/`.post`/etc. methods, `new Request`, `new ImageResponse({ src })`) without first passing through an allowlist check, a validator-named helper, or a hardcoded host context.
+
+**Severity:** high
+**Detection:** AST + intra-handler taint propagation
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+Server-side requests built from untrusted URL params are a textbook SSRF gadget. An attacker can point your server at internal services (`http://localhost`, `http://169.254.169.254/latest/meta-data/` for AWS instance metadata, your private subnets), at private files via `file:`/`gopher:`/`dict:` schemes, or at endpoints that respond differently to server-side vs public callers (cloud SSO consoles, internal admin panels). Even an "image proxy" or "OG renderer" handler — the most common motivating use case for this pattern — is an exploitable foothold without a host allowlist: in 2024–2025 several reported breaches at AI/CDN startups traced back to OG-image endpoints fetching arbitrary attacker-supplied URLs.
+
+claustra accepts an outbound request as guarded if any of the following appears between source and sink: a call to a `validate*Url`/`check*Url`/`isAllowedUrl`/`allowList*Url` helper, an `<allowlist>.includes(...)` or `<regex>.test(...)` against the tainted value, an equality check against a string literal, a receiver-side `.startsWith` / `.endsWith` / `.includes` / `.match` call with a literal argument, or `new URL(tainted, ...)` (taken as evidence the developer is parsing the input to inspect its hostname). The rule also exempts hardcoded-host construction — `fetch(\`https://api.example.com/x?id=${id}\`)`, `\`https://...\` + tainted`, or `process.env.API_BASE + tainted` — where the request URL's authority is not attacker-influenceable.
+
+### Authoritative sources
+
+- [OWASP — Server-Side Request Forgery (SSRF)](https://owasp.org/www-community/attacks/Server_Side_Request_Forgery) — *"In a Server-Side Request Forgery (SSRF) attack, the attacker can abuse functionality on the server to read or update internal resources. … The attacker can supply or modify a URL which the code running on the server will read or submit data to."*
+- [OWASP API Security Top 10 — API7:2023 SSRF](https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/) — establishes URL-validation against an allowlist as the canonical mitigation for any API endpoint that fetches a client-supplied URL.
+- [PortSwigger Web Security Academy — SSRF](https://portswigger.net/web-security/ssrf) — covers the cloud-metadata (`169.254.169.254`) and internal-port-scan attack patterns this rule is shaped against.
+- [Next.js — Route Handlers](https://nextjs.org/docs/app/api-reference/file-conventions/route) — defines the `request: Request` / `{ params }` handler contract whose inputs this rule treats as untrusted.
+
+### Bad example
+
+```ts
+// app/api/proxy/route.ts
+export async function GET(request: Request) {
+  const target = new URL(request.url).searchParams.get('url') ?? '';
+  const upstream = await fetch(target); // ❌ attacker controls full URL
+  return new Response(await upstream.text());
+}
+```
+
+### Fixed example
+
+```ts
+// app/api/proxy/route.ts
+const ALLOWED_HOSTS = new Set(['images.example.com', 'cdn.example.com']);
+
+export async function GET(request: Request) {
+  const target = new URL(request.url).searchParams.get('url') ?? '';
+  const parsed = new URL(target);
+  if (!ALLOWED_HOSTS.has(parsed.hostname)) {
+    return new Response('forbidden', { status: 403 });
+  }
+  const upstream = await fetch(parsed);
+  return new Response(await upstream.text());
+}
+```
+
+### Known limitations
+
+- Taint propagation is intra-handler only: a tainted value passed to a helper defined in a separate module is not followed into that module. If the helper performs the validation, the rule will still flag the call site unless the helper is named `validate*Url`/`check*Url`/etc.
+- Sanitizer detection is presence-based: a single sanitizing use of a tainted symbol anywhere in the handler clears it for every sink. A handler that validates `target` once and then fetches *both* `target` and a second tainted variable will not flag the second fetch.
+- The hardcoded-host exemption requires the host to be statically visible in the call site (string literal, template head, leftmost concat operand, `new URL(tainted, '<base>')`). Hosts read from a runtime variable other than `process.env.*` are conservatively treated as tainted.
+- Sinks are limited to the recognized set: `fetch`, `axios`, `got` (free-call and `.method`), `new Request`, `new ImageResponse({ src })`. Custom HTTP clients (`http.request`, `undici.fetch`, project-internal wrappers) are not yet modeled.
+- Only `route.ts`/`route.js`/`route.mjs`/`route.cjs` files (with `.tsx` variants) are analyzed. Server Actions and middleware are out of scope here — Server Action SSRF is partially covered by C1's untrusted-input check, and middleware SSRF is sufficiently rare to not warrant a dedicated rule.
+
+---
+
 ## D1 — Hydration mismatch risks
 
 **What it checks:** Render-scope expressions that produce different values on server vs client — `Date.now()`, `new Date()` without args, `Math.random()`, browser-only API reads, locale-dependent formatting without an explicit locale.
