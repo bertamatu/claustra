@@ -22,6 +22,7 @@ const ConfigSchema = z.object({
       'd01-hydration-risks': 'error',
       'd02-caching-dynamic': 'warn',
       'd03-use-cache-request-scoped': 'error',
+      'd04-use-cache-missing-tags': 'warn',
     }),
   extraServerOnlyModules: z.array(z.string()).default([]),
   ignore: z
