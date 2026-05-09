@@ -1,4 +1,4 @@
-// /api/posts-mutating — exports POST and performs a DB mutation.
+// /api/posts-mutating - exports POST and performs a DB mutation.
 // Sensitive (mutating route handler). Middleware matcher does not
 // cover it and the handler itself does not call auth(). Expected to
 // flag.

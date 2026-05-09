@@ -243,7 +243,7 @@ const messageFor = (handler: string, sink: Sink): { message: string; detail: str
     return {
       message: `Webhook handler "${handler}" reads ${sink.label} without first verifying the provider's signature`,
       detail:
-        'Webhook endpoints are public POST endpoints — anyone who knows the URL can call them with arbitrary payloads. Without signature verification, the request body is attacker-controlled and any code path that consumes it can be triggered with crafted input.',
+        'Webhook endpoints are public POST endpoints - anyone who knows the URL can call them with arbitrary payloads. Without signature verification, the request body is attacker-controlled and any code path that consumes it can be triggered with crafted input.',
       suggestion:
         "Read the raw body with request.text(), pass it to your provider's verifier (stripe.webhooks.constructEvent, Webhook.verify (svix), verify (octokit), or your own verifyWebhook helper) along with the signature header, and use only the verified result. If a development-only bypass is needed, wrap it in `if (process.env.NODE_ENV === 'development') { … }` so the production path is still required to verify.",
     };

@@ -1,4 +1,4 @@
-// Webhook handler — under /webhooks/ segment AND calls a recognized
+// Webhook handler - under /webhooks/ segment AND calls a recognized
 // signature verifier. Intentionally unauthenticated (signature-based).
 // Should NOT flag.
 import { stripe, db } from '../../../../lib/shims';

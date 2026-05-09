@@ -33,7 +33,7 @@ describe('buildModuleGraph', () => {
 
   it('records leaf files with no project-relative imports', () => {
     const deps = graph.get(abs('components/util.ts'));
-    // util.ts has no imports — should still be in the graph with an empty set
+    // util.ts has no imports - should still be in the graph with an empty set
     expect(deps).toBeDefined();
     expect(deps?.size).toBe(0);
   });
@@ -80,7 +80,7 @@ describe('getTransitiveDeps', () => {
   });
 });
 
-describe('buildModuleGraph — re-exports', () => {
+describe('buildModuleGraph - re-exports', () => {
   const FIXTURE = path.resolve(__dirname, '../fixtures/a01-server-only-leak');
   const { program } = buildProgram(findTsConfig(FIXTURE));
   const graph = buildModuleGraph(program);
@@ -99,7 +99,7 @@ describe('buildModuleGraph — re-exports', () => {
   });
 });
 
-describe('buildModuleGraph — tsconfig path aliases', () => {
+describe('buildModuleGraph - tsconfig path aliases', () => {
   const FIXTURE = path.resolve(__dirname, '../fixtures/module-graph-aliases');
   const { program } = buildProgram(findTsConfig(FIXTURE));
   const graph = buildModuleGraph(program);
@@ -112,7 +112,7 @@ describe('buildModuleGraph — tsconfig path aliases', () => {
   });
 });
 
-describe('buildModuleGraph — monorepo workspace via paths', () => {
+describe('buildModuleGraph - monorepo workspace via paths', () => {
   const FIXTURE = path.resolve(__dirname, '../fixtures/module-graph-monorepo');
   const { program } = buildProgram(findTsConfig(FIXTURE));
   const graph = buildModuleGraph(program);

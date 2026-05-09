@@ -1,6 +1,6 @@
 'use client';
 
-// `encrypt` is in claustra's KNOWN_ENCRYPTION_HELPERS list — wrapping
+// `encrypt` is in claustra's KNOWN_ENCRYPTION_HELPERS list - wrapping
 // the value in it is treated as sufficient mitigation, even with a
 // suspect-named key. This must NOT be flagged at any severity.
 declare const encrypt: (input: string) => string;

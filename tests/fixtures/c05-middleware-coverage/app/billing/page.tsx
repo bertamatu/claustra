@@ -1,4 +1,4 @@
-// /billing — sensitive segment "billing", NOT covered by middleware
+// /billing - sensitive segment "billing", NOT covered by middleware
 // matcher, but the page itself calls auth() before rendering.
 // Should NOT flag.
 import { auth } from '../../lib/shims';

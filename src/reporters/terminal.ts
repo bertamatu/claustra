@@ -35,7 +35,7 @@ export const terminalReporter = (findings: Finding[]): void => {
   for (const finding of findings) {
     const loc = pc.dim(`${finding.file}:${finding.line}`);
     console.log(`  ${SEVERITY_ICON[finding.severity]}  ${loc}`);
-    console.log(`    ${pc.bold(finding.ruleId.toUpperCase())} — ${finding.message}`);
+    console.log(`    ${pc.bold(finding.ruleId.toUpperCase())} - ${finding.message}`);
     if (finding.detail) {
       for (const line of finding.detail.split('\n')) {
         console.log(`    ${line}`);

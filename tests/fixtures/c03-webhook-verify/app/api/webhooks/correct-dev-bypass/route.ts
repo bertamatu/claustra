@@ -1,6 +1,6 @@
 // Dev bypass acceptable because the production branch verifies. With
 // callsVerifier() returning true (constructEvent in else branch), the
-// whole handler is treated as safe — no findings.
+// whole handler is treated as safe - no findings.
 import Stripe from 'stripe';
 import { db } from '../../../../lib/db';
 

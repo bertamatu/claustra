@@ -11,7 +11,7 @@ import { BadWindowJwt } from '../components/bad-window-jwt';
 // Server-only file: a setItem call here must NOT be flagged because it is
 // not reachable from a 'use client' file.
 const _ignoredOnServer = (): void => {
-  // @ts-expect-error — localStorage is DOM-only, but we're just asserting
+  // @ts-expect-error - localStorage is DOM-only, but we're just asserting
   // the rule does not even read this file. The expression never runs.
   if (typeof localStorage !== 'undefined') localStorage.setItem('jwt', 'x');
 };

@@ -86,7 +86,7 @@ const inspectTypeShallow = (
   t: ts.Type,
   checker: ts.TypeChecker,
 ): FlagKind | null => {
-  // any / unknown — can't conclude anything
+  // any / unknown - can't conclude anything
   if (t.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return null;
 
   // BigInt primitive
@@ -112,7 +112,7 @@ const inspectTypeShallow = (
   if (sym && sym.flags & ts.SymbolFlags.Class) return 'class';
 
   // Fallback: a non-class instance whose constructor isn't Object
-  // (skip — too noisy for v1)
+  // (skip - too noisy for v1)
   void checker;
   return null;
 };
@@ -148,7 +148,7 @@ const messageFor = (kind: FlagKind, propName: string): {
       return {
         severity: 'high',
         message: `Function passed as prop "${propName}" to a Client Component`,
-        detail: 'Functions are not serializable across the server/client boundary. React drops them or throws at render time. Server Actions ("use server") are exempt — those resolve to a callable reference on the client.',
+        detail: 'Functions are not serializable across the server/client boundary. React drops them or throws at render time. Server Actions ("use server") are exempt - those resolve to a callable reference on the client.',
         suggestion: `Either move "${propName}" into a Server Action (mark its definition with 'use server'), or attach the handler inside the Client Component itself.`,
       };
     case 'class':
@@ -176,7 +176,7 @@ const messageFor = (kind: FlagKind, propName: string): {
       return {
         severity: 'high',
         message: `Symbol passed as prop "${propName}" to a Client Component`,
-        detail: 'Symbols cannot cross the server/client boundary — they are unique per realm.',
+        detail: 'Symbols cannot cross the server/client boundary - they are unique per realm.',
         suggestion: 'Use a string key instead.',
       };
     case 'bigint':
@@ -222,7 +222,7 @@ const checkJsxElement = (
     if (ts.isJsxExpression(attr.initializer)) {
       valueExpr = attr.initializer.expression;
     } else if (ts.isStringLiteral(attr.initializer)) {
-      // <C name="alice" /> — strings are always serializable, skip
+      // <C name="alice" /> - strings are always serializable, skip
       continue;
     }
     if (!valueExpr) continue;
@@ -257,7 +257,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
     // Source files that are themselves Client Components don't cross the boundary
-    // when they render other Client Components — both sides run in the browser, so
+    // when they render other Client Components - both sides run in the browser, so
     // function props / Map / Date / etc. serialize fine.
     if (ctx.boundaryMap.get(sourceFile.fileName) === 'client') continue;
 

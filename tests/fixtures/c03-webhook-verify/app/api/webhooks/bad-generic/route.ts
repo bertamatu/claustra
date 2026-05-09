@@ -1,4 +1,4 @@
-// Generic webhook (path-based detection only — no SDK import). Reads
+// Generic webhook (path-based detection only - no SDK import). Reads
 // body and writes to DB without any verifier in scope. Two findings.
 import { db } from '../../../../lib/db';
 
