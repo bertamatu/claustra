@@ -23,6 +23,7 @@ const ConfigSchema = z.object({
       'd02-caching-dynamic': 'warn',
       'd03-use-cache-request-scoped': 'error',
       'd04-use-cache-missing-tags': 'warn',
+      'd05-revalidate-outside-mutation': 'error',
     }),
   extraServerOnlyModules: z.array(z.string()).default([]),
   ignore: z
