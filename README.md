@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
 
-> **Catches the nine ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, or expose unauthenticated database writes.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
+> **Catches the ten ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, or expose unauthenticated database writes.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
 
 ---
 
@@ -145,7 +145,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Nine rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Ten rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** — Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -155,6 +155,7 @@ Nine rules across four categories. Each one cites authoritative Next.js / React 
 **Data crossing the boundary (B)**
 - **B1** — Non-serializable props: functions, classes, `Map`/`Set`/`Symbol`/`BigInt`, raw `Date`.
 - **B2** — Server data leakage: sensitive prop names, spread props, whole DB records crossing into Client Components.
+- **B3** — Auth tokens or PII written to `localStorage` / `sessionStorage` from client code (key matches `token`/`jwt`/`auth`/`session`/`secret`/…, or value is `JSON.stringify(user/profile/account)`). Suppressed when the value is wrapped in a recognized encryption helper; downgraded to medium when wrapped in an unverifiable `secure*`/`encrypted*` function.
 
 **Server Action safety (C)**
 - **C1** — Server Actions whose parameters reach a database write, `fetch()`, or cache invalidation without passing through a recognized validator (Zod, Valibot, Yup, ArkType, TypeBox).
