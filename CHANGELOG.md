@@ -2,6 +2,12 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **D4 — `'use cache'` function without `cacheLife` or `cacheTag`** (severity: medium, default `warn`). Pairs with D3 in covering the Next.js 16 caching directive surface. Each cached scope (function-level `'use cache'`, or every top-level function in a file-level cached file) is checked for at least one direct call to `cacheLife()` or `cacheTag()` resolved against `next/cache` imports. Without those, the cache lifetime and invalidation behavior come from framework defaults that drift between Next.js minor versions; pairing the directive with at least one configurator makes the cache contract explicit at the call site. Skipped on Next.js 15 and earlier. See [RULES.md#d4](./RULES.md#d4--use-cache-function-without-cachelife-or-cachetag).
+
 ## [1.2.0] — 2026-05-10
 
 Two new rules covering the Next.js 14 → 15 → 16 migration: the `params` Promise change and the `'use cache'` directive going stable. Both are critical-severity because the failure modes are silent — pages that render with empty data, or one user's session served from cache to another. 318 tests, no breaking changes.

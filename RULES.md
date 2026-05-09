@@ -1078,6 +1078,67 @@ export default async function Page() {
 
 ---
 
+## D4 — `'use cache'` function without `cacheLife` or `cacheTag`
+
+**What it checks:** A function marked with the `'use cache'` directive — either as a function-body directive or implicitly via its enclosing file's directive prologue — does not call `cacheLife()` or `cacheTag()` from `next/cache`. The cache lifetime and invalidation behavior are left at framework defaults.
+
+**Severity:** medium
+**Detection:** AST walk. For each cached scope (a function with its own `'use cache'` directive, or every top-level function in a file that begins with `'use cache'`), the rule scans the function body for a call expression whose callee identifier is bound (via a `next/cache` import) to `cacheLife` or `cacheTag`. If neither call is present, the rule emits one finding per cached function.
+**Applies to:** Next.js 16 stable. Skipped on Next.js 15 and below.
+
+### Why it's a real problem
+
+`'use cache'` without `cacheLife` or `cacheTag` is technically valid — but it's a contract leak. Reading the function tells you the result is cached; it does not tell you for how long, what invalidates it, or how to reason about staleness. Behavior comes from framework defaults that vary between Next.js minor releases (the team has shifted them at least once already in the 16.x line) and from any global profile in `next.config.js`. Staff reviewing the function months later — including the original author — will guess wrong about its semantics.
+
+The fix is small and self-documenting: pair every `'use cache'` with at least one of `cacheLife('<profile>')` (defines the lifetime) or `cacheTag('<key>')` (lets a Server Action invalidate this cache via `revalidateTag`). The directive plus one configurator explains the cache contract right where the code lives.
+
+### Authoritative sources
+
+- [Next.js — `cacheLife` reference](https://nextjs.org/docs/app/api-reference/functions/cache-life) — defines lifetime profiles and the per-function call shape.
+- [Next.js — `cacheTag` reference](https://nextjs.org/docs/app/api-reference/functions/cache-tag) — defines tag-based invalidation, paired with `revalidateTag` from Server Actions.
+- [Next.js — `'use cache'` directive guide](https://nextjs.org/docs/app/getting-started/caching#use-cache) — the recommended pairing pattern.
+
+### Bad example
+
+```ts
+// app/lib/catalog.ts
+export const getCatalog = async () => {
+  'use cache';                              // ❌ no cacheLife, no cacheTag
+  return loadCatalog();
+};
+```
+
+```ts
+// app/lib/dashboard.ts — file-level directive without per-function tags
+'use cache';
+
+export const getProducts = async () => loadProducts();    // ❌ no tags
+export const getCategories = async () => loadCategories(); // ❌ no tags
+```
+
+### Fixed example
+
+```ts
+import { cacheLife, cacheTag } from 'next/cache';
+
+export const getCatalog = async () => {
+  'use cache';
+  cacheLife('hours');                       // ✅ explicit lifetime
+  cacheTag('catalog');                      // ✅ invalidatable tag
+  return loadCatalog();
+};
+```
+
+### Known limitations
+
+- Cached scope membership is determined statically: top-level function declarations / variable-initializer arrows in a file-level cached file, plus any function whose body's directive prologue is `'use cache'`. Helpers nested inside an outer cached function are not independently flagged (they share the outer cache key).
+- The rule only counts direct `cacheLife()` / `cacheTag()` calls inside the function body. A wrapping helper that calls them on the cached function's behalf is not chased — same inter-procedural limitation as D3.
+- Identifier resolution is via the `next/cache` import — local rebinds (`import { cacheLife as _cl }`) are followed; star-imports (`import * as next from 'next/cache'`) are not.
+- The `cacheLife` and `cacheTag` exports from `next/cache` are the only configurators recognized; project-local helpers that wrap them are out of scope.
+- Skipped entirely on Next.js 15 and below. Projects using the Next.js 15 experimental `cacheComponents` flag with `'use cache'` are not covered until they upgrade to 16.
+
+---
+
 ## How sources stay current
 
 Documentation, advisories, and best practices in this ecosystem change frequently. To prevent claustra from going stale:
