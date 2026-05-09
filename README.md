@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
 
-> **Catches the ten ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, or expose unauthenticated database writes.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
+> **Catches the eleven ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, or expose unauthenticated database writes.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
 
 ---
 
@@ -145,7 +145,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Ten rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Eleven rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** — Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -160,6 +160,7 @@ Ten rules across four categories. Each one cites authoritative Next.js / React d
 **Server Action safety (C)**
 - **C1** — Server Actions whose parameters reach a database write, `fetch()`, or cache invalidation without passing through a recognized validator (Zod, Valibot, Yup, ArkType, TypeBox).
 - **C2** — Server Actions that mutate without an authorization check (NextAuth `auth()`, Clerk `currentUser()`, Lucia `validateRequest()`, custom `verify*`/`require*`/`check*` helpers).
+- **C3** — Webhook route handlers (`stripe`/`svix`/`@octokit/webhooks`/`@clerk/backend`/etc., or any `route.ts` under a `/webhook(s)/` segment) that read the request body or perform a database write without calling a recognized signature verifier (`stripe.webhooks.constructEvent`, `Webhook.verify`, `verify`, or `verify*Webhook|Signature`-named helpers). Honors `if (process.env.NODE_ENV === 'development')` dev-bypass blocks.
 
 **Rendering correctness (D)**
 - **D1** — Hydration mismatch risks: `Date`, `Math.random()`, browser globals in render scope, locale formatters without explicit locale.
