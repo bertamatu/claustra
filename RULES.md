@@ -719,6 +719,77 @@ export async function GET(request: Request) {
 
 ---
 
+## C5 — Sensitive route lacks middleware coverage and inline auth
+
+**What it checks:** A Next.js App Router page or route handler that *looks* sensitive — its URL contains `/admin`, `/dashboard`, `/account`, `/settings`, or `/billing`; or its file lives inside an `(authenticated)` / `(protected)` / `(dashboard)` route group; or it's a route handler that exports `POST`/`PUT`/`PATCH`/`DELETE` or performs a DB/FS mutation — and is *not* protected by either (a) a `middleware.{ts,js}` whose `config.matcher` covers the URL **and** whose body calls a recognized auth helper, or (b) an `auth()`/`currentUser()`/`validateRequest()`/`verify*Auth`/etc. call inside the route file itself or in any ancestor `layout.tsx`.
+
+**Severity:** high
+**Detection:** AST + file-system analysis (path-to-regexp matcher modeling, ancestor-layout traversal)
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+Authentication in Next.js App Router is split across three places: `middleware.ts` (runs before the route resolves), the route's own component or handler, and any ancestor `layout.tsx` (which executes for every descendant page). A common, hard-to-spot bug is the middleware/layout drift: a developer adds `/admin` pages, intends to protect them with `middleware.ts`, but forgets to add `/admin/:path*` to `config.matcher` — so the middleware never runs for those routes. Or they refactor a `layout.tsx` and remove the `auth()` call. Or they add a Stripe-billing endpoint at `/api/billing/create-customer` and forget that route handlers, unlike pages, don't inherit their parent layout's `auth()` call. In each case the route ships *publicly accessible* despite looking like it sits behind auth — and indexers, scrapers, and accidental linking will find it within hours.
+
+claustra resolves coverage in the order Next.js does at runtime: middleware first (matcher must cover the URL *and* the middleware body must actually call a recognized auth helper, otherwise it's just rewrites/headers and not a security gate), then inline auth in the file, then `auth()` in any ancestor `layout.tsx`. Webhook handlers (under `/webhook(s)/` or calling a recognized C3 verifier) are explicitly exempt — they are intentionally unauthenticated and gated by signature instead.
+
+### Authoritative sources
+
+- [Next.js — Middleware](https://nextjs.org/docs/app/building-your-application/routing/middleware) — *"Middleware will be invoked for every route in your project … the matcher allows you to filter Middleware to run on specific paths."* Establishes that matcher gaps mean the middleware is bypassed for those routes.
+- [Next.js — Authentication](https://nextjs.org/docs/app/guides/authentication#optimistic-checks-with-middleware-optional) — describes the layered model (middleware as optimistic check; the actual gate must live in the data-access layer or component) and warns against relying on middleware alone.
+- [Next.js — How to Think About Security in Next.js](https://nextjs.org/blog/security-nextjs-server-components-actions) — *"Authorization should not be performed in middleware alone … verify on every request inside the data access layer."*
+- [Clerk — Protecting routes](https://clerk.com/docs/references/nextjs/clerk-middleware) — `clerkMiddleware()` + `config.matcher` is the canonical pattern; missing matcher entries are the most common Clerk-on-App-Router misconfiguration in their support corpus.
+
+### Bad example
+
+```ts
+// middleware.ts
+import { auth } from '@/auth';
+export default auth;
+export const config = { matcher: ['/admin/:path*'] };
+
+// app/dashboard/page.tsx — looks protected, isn't.
+export default async function DashboardPage() {
+  const data = await fetchUserPrivateData(); // ❌ public
+  return <div>{data.email}</div>;
+}
+```
+
+### Fixed example
+
+```ts
+// middleware.ts
+import { auth } from '@/auth';
+export default auth;
+export const config = { matcher: ['/admin/:path*', '/dashboard/:path*'] };
+```
+
+…or protect inline:
+
+```tsx
+// app/dashboard/page.tsx
+import { auth } from '@/auth';
+import { redirect } from 'next/navigation';
+
+export default async function DashboardPage() {
+  const session = await auth();
+  if (!session) redirect('/login');
+  const data = await fetchUserPrivateData();
+  return <div>{data.email}</div>;
+}
+```
+
+### Known limitations
+
+- Recognized auth helpers are name-based: `auth`, `getServerSession`, `getServerAuthSession`, `currentUser`, `validateRequest`, `getSession`, `getToken`, `clerkMiddleware`, `authMiddleware`, `withAuth`, plus the regex `^(verify|require|check|assert|guard).*?(Auth|Session|User|Permission|Role|Access)`. A custom auth helper named `protectAdmin` would NOT count — rename it to `requireAdminSession` (or similar) or add it to the project's `extraServerOnlyModules` config equivalent (TODO: a `c05.extraAuthHelpers` config knob is on the v2 list).
+- The `(auth)` route group is intentionally NOT treated as sensitive, because Next.js's own examples use it for the *unauthenticated* sign-in/sign-up flow. Use `(authenticated)` / `(protected)` / `(dashboard)` for protected sub-trees if you want claustra to recognize them.
+- Ancestor-layout coverage walks upward only inside the same `app/` tree. A page protected by middleware on a workspace re-export (e.g. middleware exported from a sibling package) is NOT recognized as covered — claustra reads only the project's own `middleware.{ts,js}`.
+- Path-to-regexp parsing is a deliberate subset (literals, `:name`/`:name*`/`:name+`/`:name?`, raw `(...)` groups, the standard Next.js `((?!…).*)` negative-lookahead form). Unrecognized syntax is treated conservatively as "covers everything" to avoid false positives.
+- `routeExportsMutatingMethod` recognizes only the standard HTTP method export names. A handler that re-exports a `POST` from another module is not flagged on the export-name path; the DB-write path will still fire.
+- Pages Router, Remix, and other SSR frameworks are out of scope — App Router only.
+
+---
+
 ## D1 — Hydration mismatch risks
 
 **What it checks:** Render-scope expressions that produce different values on server vs client — `Date.now()`, `new Date()` without args, `Math.random()`, browser-only API reads, locale-dependent formatting without an explicit locale.
