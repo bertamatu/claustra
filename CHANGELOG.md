@@ -2,12 +2,19 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.3.0] — 2026-05-10
+
+Closes the Next.js 16 caching-correctness arc opened by D3 in v1.2.0. Two new rules covering the rest of the `'use cache'` directive surface and the `next/cache` invalidation primitives. 338 tests, no breaking changes.
 
 ### Added
 
 - **D4 — `'use cache'` function without `cacheLife` or `cacheTag`** (severity: medium, default `warn`). Pairs with D3 in covering the Next.js 16 caching directive surface. Each cached scope (function-level `'use cache'`, or every top-level function in a file-level cached file) is checked for at least one direct call to `cacheLife()` or `cacheTag()` resolved against `next/cache` imports. Without those, the cache lifetime and invalidation behavior come from framework defaults that drift between Next.js minor versions; pairing the directive with at least one configurator makes the cache contract explicit at the call site. Skipped on Next.js 15 and earlier. See [RULES.md#d4](./RULES.md#d4--use-cache-function-without-cachelife-or-cachetag).
 - **D5 — `revalidateTag` / `revalidatePath` / `updateTag` outside a mutation context** (severity: high). Walks the AST tracking `inUseCache`, `inUseServer`, and `inRouteHandler` flags. Flags calls in three contexts: `'use cache'` functions (contradictory — cached function invalidating itself), `'use client'` files (`next/cache` is server-only — throws or rejected by bundler), and Server Component render paths (no-ops or invalidates mid-render). Recognizes file-level `'use server'`, function-level `'use server'` (inline Server Actions), and HTTP-method exports of `route.{ts,tsx,js,jsx}` files under `app/` as the safe contexts. Conservative on directive-less helper modules — they may be called from a Server Action and the rule cannot tell statically. Identifier resolution follows local rebinds via `next/cache` imports. Not version-gated; applies to Next.js 13.4+. See [RULES.md#d5](./RULES.md#d5--revalidatetag--revalidatepath--updatetag-outside-a-mutation-context).
+
+### Changed
+
+- **Default rule set** in `.claustra.json` now includes D4 (at `warn`) and D5 (at `error`). Existing configs that pin specific rules are unaffected.
+- **Package description and keywords** updated to mention the Next.js 16 caching-correctness surface and add `use-cache`/`caching` keywords for npm discoverability.
 
 ## [1.2.0] — 2026-05-10
 
