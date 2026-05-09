@@ -1,0 +1,6 @@
+{
+  "name": "fixture-a03-env-public-secret",
+  "version": "0.0.0",
+  "private": true,
+  "//": "Fixture metadata only — never installed. The .env* files in this directory contain synthetic, non-functional values used solely to exercise the a03 secret-pattern detector. They are NOT real credentials."
+}
