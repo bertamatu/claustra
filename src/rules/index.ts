@@ -14,5 +14,6 @@ import c02 from './c02-unauthorized-server-actions.js';
 import d01 from './d01-hydration-risks.js';
 import d02 from './d02-caching-dynamic.js';
 import d03 from './d03-use-cache-request-scoped.js';
+import d04 from './d04-use-cache-missing-tags.js';
 
-export const rules: Rule[] = [a01, a02, a03, a04, b01, b02, b03, c01, c02, c03, c04, c05, d01, d02, d03];
+export const rules: Rule[] = [a01, a02, a03, a04, b01, b02, b03, c01, c02, c03, c04, c05, d01, d02, d03, d04];
