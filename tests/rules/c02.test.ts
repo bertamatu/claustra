@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('c02 — server actions without authorization', () => {
+describe('c02 - server actions without authorization', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

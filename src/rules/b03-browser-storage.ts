@@ -169,7 +169,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
           file: rel(file),
           line,
           column,
-          message: `${storage}.setItem wrapped in "${wrapping.name ?? '?'}" — encryption cannot be verified statically`,
+          message: `${storage}.setItem wrapped in "${wrapping.name ?? '?'}" - encryption cannot be verified statically`,
           detail: `The value is passed through "${wrapping.name ?? '?'}", whose name suggests encryption, but the function is not in claustra's recognized helper list. If the helper does perform real authenticated encryption, you can ignore this; if it is a pass-through or weak encoding (base64, btoa, custom XOR), this write is no safer than a plain setItem.`,
           suggestion: 'Confirm the wrapper performs authenticated encryption with a key not derivable from the bundle. If it does, consider renaming it to one of the recognized helper names so future scans suppress this warning. Otherwise, prefer httpOnly cookies for auth tokens or in-memory state for session data.',
         });
@@ -184,7 +184,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 
       const reasonParts: string[] = [];
       if (keyHit) reasonParts.push(`key "${staticKey}" matches token/auth/session pattern`);
-      if (valueHit) reasonParts.push(`value is JSON.stringify(${valueHit.name}) — likely PII`);
+      if (valueHit) reasonParts.push(`value is JSON.stringify(${valueHit.name}) - likely PII`);
 
       findings.push({
         ruleId: RULE_ID,
@@ -192,7 +192,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
         file: rel(file),
         line,
         column,
-        message: `${storage}.setItem writes likely-sensitive data — ${reasonParts.join('; ')}`,
+        message: `${storage}.setItem writes likely-sensitive data - ${reasonParts.join('; ')}`,
         detail:
           'Anything in localStorage / sessionStorage is readable by any JavaScript that runs on the same origin, including XSS payloads, third-party scripts, and browser extensions. Auth tokens stored here turn one XSS into a full account takeover; PII stored here makes the storage layer a permanent liability.',
         suggestion:

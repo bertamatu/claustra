@@ -146,7 +146,7 @@ const expressionReadsTainted = (
 };
 
 // Recognize taint-source expressions that don't necessarily live in a
-// `tainted` symbol set yet — direct reads of `.url`, `.nextUrl.*`, and
+// `tainted` symbol set yet - direct reads of `.url`, `.nextUrl.*`, and
 // `.searchParams.get(...)` calls. The result of these expressions is
 // itself attacker-controlled.
 const collectTaintedExpressions = (
@@ -201,7 +201,7 @@ const collectTaintedExpressions = (
         out.add(node);
       }
     }
-    // <x>.searchParams.get(<y>)  — tainted result
+    // <x>.searchParams.get(<y>)  - tainted result
     if (ts.isCallExpression(node)) {
       const c = node.expression;
       if (ts.isPropertyAccessExpression(c) && c.name.text === 'get') {
@@ -288,7 +288,7 @@ const isInSanitizerContext = (node: ts.Node): boolean => {
       // 2) Allowlist check: <arr>.includes(prev), or regex.test(prev)
       if (name === 'includes' || name === 'test') return true;
     }
-    // new URL(prev, ...) — handled separately because NewExpression isn't CallExpression
+    // new URL(prev, ...) - handled separately because NewExpression isn't CallExpression
     if (
       ts.isNewExpression(cur) &&
       ts.isIdentifier(cur.expression) &&
@@ -410,7 +410,7 @@ const collectSinks = (body: ts.Block): SinkInfo[] => {
         }
       }
     }
-    // new Request(<url>, ...) — first arg
+    // new Request(<url>, ...) - first arg
     if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Request') {
       const first = node.arguments?.[0];
       if (first) out.push({ call: node, argNode: first, label: 'new Request()' });
@@ -431,7 +431,7 @@ const collectSinks = (body: ts.Block): SinkInfo[] => {
           ) {
             out.push({ call: node, argNode: prop.initializer, label: 'new ImageResponse({ src })' });
           }
-          // { src } shorthand — the property name is also the value.
+          // { src } shorthand - the property name is also the value.
           if (
             ts.isShorthandPropertyAssignment(prop) &&
             ts.isIdentifier(prop.name) &&
@@ -533,7 +533,7 @@ const collectRequestSymbols = (
   const second = fn.parameters[1];
   if (second) {
     if (ts.isIdentifier(second.name)) {
-      // ctx itself — params is ctx.params
+      // ctx itself - params is ctx.params
       // We'll treat any property access ctx.params.<x> via paramsLikeSyms = {} and rely on chains.
       // For simplicity, also add ctx as a paramsLike root so ctx.params.<x> taints.
       const sym = checker.getSymbolAtLocation(second.name);
@@ -605,7 +605,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
           detail:
             'Server-side requests built from request URL params or route segments are an SSRF gadget: an attacker can point your server at internal services (localhost, 169.254.169.254 metadata endpoints, internal subnets), at private files via file:/gopher:/dict: schemes, or at endpoints that respond differently to server-side vs public callers. Even an "image proxy" or "OG renderer" handler is an exploitable foothold without a host allowlist.',
           suggestion:
-            'Validate the URL against an allowlist before fetching. Common shapes: `if (!ALLOWED_HOSTS.includes(new URL(url).hostname)) throw …`, a regex test against a hostname pattern, or a `validateUrl(url)` helper. If the URL is meant to live on a fixed host, build it as `fetch(\\`https://api.example.com/x?id=${"$"}{id}\\`)` so the host is hardcoded — or read the base from `process.env.<X>`.',
+            'Validate the URL against an allowlist before fetching. Common shapes: `if (!ALLOWED_HOSTS.includes(new URL(url).hostname)) throw …`, a regex test against a hostname pattern, or a `validateUrl(url)` helper. If the URL is meant to live on a fixed host, build it as `fetch(\\`https://api.example.com/x?id=${"$"}{id}\\`)` so the host is hardcoded - or read the base from `process.env.<X>`.',
         });
       }
     }
@@ -622,7 +622,7 @@ const allReadTaintedSymbolsAreSanitized = (
   checker: ts.TypeChecker,
 ): boolean => {
   // If the sink reads any tainted-EXPRESSION (e.g. inline req.url) it
-  // cannot be sanitized — there's no symbol to clear.
+  // cannot be sanitized - there's no symbol to clear.
   let allClean = true;
   let sawAnyTaintedSymbol = false;
   const visit = (n: ts.Node): void => {
@@ -655,7 +655,7 @@ const allReadTaintedSymbolsAreSanitized = (
 export const rule: Rule = {
   id: RULE_ID,
   description:
-    'Detects Next.js Route Handlers that pass a request-derived URL (from searchParams, request.url, request.nextUrl, or route params) to fetch / axios / got / new Request / new ImageResponse without an allowlist check, validator function call, or hardcoded-host context — the static signature of an SSRF gadget.',
+    'Detects Next.js Route Handlers that pass a request-derived URL (from searchParams, request.url, request.nextUrl, or route params) to fetch / axios / got / new Request / new ImageResponse without an allowlist check, validator function call, or hardcoded-host context - the static signature of an SSRF gadget.',
   severity: SEVERITY,
   run,
 };

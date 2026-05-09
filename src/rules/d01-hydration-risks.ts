@@ -13,7 +13,7 @@ const SAFE_HOOK_NAMES = new Set([
   'useImperativeHandle',
   // useMemo/useCallback are render-time but the function inside only runs on initial mount + dep-change.
   // For Date.now / Math.random, they still produce different values server vs client unless deps stabilize them.
-  // We treat them as safe here to avoid false positives — hydration-mismatch tooling can revisit.
+  // We treat them as safe here to avoid false positives - hydration-mismatch tooling can revisit.
   'useMemo',
   'useCallback',
 ]);
@@ -104,7 +104,7 @@ const hasTypeofBrowserGuard = (node: ts.Node): boolean => {
 
 const isInSafeContext = (node: ts.Node): boolean => {
   // ts.Node.parent is typed as non-nullable in the lib, but at runtime
-  // the SourceFile's parent is undefined — hence the explicit cast.
+  // the SourceFile's parent is undefined - hence the explicit cast.
   let current = node.parent as ts.Node | undefined;
   let suppressed = false;
   while (current !== undefined) {
@@ -168,7 +168,7 @@ const TRIGGERS: Trigger[] = [
       n.expression.text === 'Date' &&
       (!n.arguments || n.arguments.length === 0),
     message: 'new Date() with no arguments in render scope',
-    detail: 'A no-argument `new Date()` resolves to the current moment — different on server vs client. The hydration string will mismatch.',
+    detail: 'A no-argument `new Date()` resolves to the current moment - different on server vs client. The hydration string will mismatch.',
     suggestion: 'Pass an explicit timestamp, or initialize in useEffect.',
   },
   {
@@ -201,7 +201,7 @@ const TRIGGERS: Trigger[] = [
       n.expression.expression.text === 'crypto' &&
       (n.expression.name.text === 'randomUUID' || n.expression.name.text === 'getRandomValues'),
     message: 'crypto random API in render scope',
-    detail: 'crypto.randomUUID()/getRandomValues() returns different values per call — server and client will disagree.',
+    detail: 'crypto.randomUUID()/getRandomValues() returns different values per call - server and client will disagree.',
     suggestion: 'Generate in useEffect, or accept the value as a prop from a stable parent.',
   },
 ];
@@ -272,7 +272,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
           line,
           column,
           message: 'Locale-dependent formatter without explicit locale in render scope',
-          detail: 'toLocaleString/toLocaleDateString/toLocaleTimeString without a locale argument uses the runtime default — server and client locales differ.',
+          detail: 'toLocaleString/toLocaleDateString/toLocaleTimeString without a locale argument uses the runtime default - server and client locales differ.',
           suggestion: "Pass an explicit locale: e.g. value.toLocaleDateString('en-US').",
         });
       }

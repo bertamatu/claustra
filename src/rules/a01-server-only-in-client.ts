@@ -180,7 +180,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 
     // process.env reads
     for (const { key, node } of collectProcessEnvReads(sf)) {
-      // NEXT_PUBLIC_* and NODE_ENV are inlined for the client by Next.js — safe to read anywhere.
+      // NEXT_PUBLIC_* and NODE_ENV are inlined for the client by Next.js - safe to read anywhere.
       if (key.startsWith('NEXT_PUBLIC_')) continue;
       if (key === 'NODE_ENV') continue;
       const { line, column } = lineCol(sf, node);

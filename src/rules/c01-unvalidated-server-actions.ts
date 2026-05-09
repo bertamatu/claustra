@@ -91,7 +91,7 @@ const isValidatorCall = (
   }
   if (ts.isIdentifier(callee)) {
     if (VALIDATOR_FREE_FN.has(callee.text)) return true;
-    // Aliased import: `import { parse as valibotParse } from 'valibot'` — resolve the alias.
+    // Aliased import: `import { parse as valibotParse } from 'valibot'` - resolve the alias.
     const sym = checker.getSymbolAtLocation(callee);
     if (sym && sym.flags & ts.SymbolFlags.Alias) {
       const original = checker.getAliasedSymbol(sym);
@@ -213,7 +213,7 @@ const expressionReadsTainted = (
       if (parent && ts.isPropertyAssignment(parent) && parent.name === n) {
         return;
       }
-      // Shorthand `{ data }` — the same Identifier names the key AND references the
+      // Shorthand `{ data }` - the same Identifier names the key AND references the
       // local variable. getSymbolAtLocation returns the property symbol; the variable
       // backing the shorthand requires the dedicated checker API.
       if (parent && ts.isShorthandPropertyAssignment(parent) && parent.name === n) {
@@ -345,7 +345,7 @@ const messageForKind = (kind: SinkKind, fnName: string): {
     case 'db-write':
       return {
         message: `${base} a database write`,
-        detail: 'Server Actions are public POST endpoints — TypeScript types are erased at runtime. Without runtime validation, an attacker can send arbitrary payloads and write whatever they want.',
+        detail: 'Server Actions are public POST endpoints - TypeScript types are erased at runtime. Without runtime validation, an attacker can send arbitrary payloads and write whatever they want.',
         suggestion: 'Validate the input with Zod (Schema.parse), Valibot (parse(Schema, input)), Yup (Schema.validateSync), ArkType (Schema.assert), or a manual type predicate before passing it to the database.',
       };
     case 'fs-write':
@@ -363,7 +363,7 @@ const messageForKind = (kind: SinkKind, fnName: string): {
     case 'revalidate':
       return {
         message: `${base} revalidatePath()/revalidateTag()`,
-        detail: 'Unvalidated cache-tag/path arguments enable cache poisoning — an attacker can force unrelated paths to be invalidated or trigger unexpected cache misses.',
+        detail: 'Unvalidated cache-tag/path arguments enable cache poisoning - an attacker can force unrelated paths to be invalidated or trigger unexpected cache misses.',
         suggestion: 'Validate the tag/path against an allowlist before calling revalidatePath or revalidateTag.',
       };
   }

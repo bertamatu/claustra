@@ -1,4 +1,4 @@
-// No fetch sink — handler reads tainted data and echoes it back. C4
+// No fetch sink - handler reads tainted data and echoes it back. C4
 // only fires when tainted data reaches a network sink, so this must
 // not flag.
 export async function GET(request: Request): Promise<Response> {

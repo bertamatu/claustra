@@ -40,7 +40,7 @@ export async function deleteAsAdmin(id: string): Promise<void> {
   await db.post.delete({ where: { id } });
 }
 
-// OK: read-only — no mutation, no flag needed
+// OK: read-only - no mutation, no flag needed
 export async function readPost(id: string): Promise<unknown> {
   return await db.post.findUnique({ where: { id } });
 }

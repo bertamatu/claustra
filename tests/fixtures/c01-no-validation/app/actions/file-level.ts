@@ -78,7 +78,7 @@ export async function noParams(): Promise<void> {
   await db.post.create({ data: { title: 'static' } });
 }
 
-// OK: read-only — no sink
+// OK: read-only - no sink
 export async function getPost(id: string): Promise<unknown> {
   return await db.post.findUnique({ where: { id } });
 }

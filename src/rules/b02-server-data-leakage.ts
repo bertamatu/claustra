@@ -149,7 +149,7 @@ const checkJsxElement = (
         line,
         column,
         message: `Whole DB record passed as prop "${propName}" to a Client Component`,
-        detail: 'The value of this prop comes directly from a Prisma/Mongoose query that did not specify a `select` or `omit`. The full row — including any private columns — is serialized into the page HTML and JS.',
+        detail: 'The value of this prop comes directly from a Prisma/Mongoose query that did not specify a `select` or `omit`. The full row - including any private columns - is serialized into the page HTML and JS.',
         suggestion: 'Add `select: { ... }` (or `omit: {...}`) to the query so only the fields the UI needs cross the boundary, or destructure the safe fields explicitly.',
       });
     }
@@ -164,7 +164,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   for (const sourceFile of ctx.program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
-    // Client → client renders don't cross the server/client boundary — nothing leaks.
+    // Client → client renders don't cross the server/client boundary - nothing leaks.
     if (ctx.boundaryMap.get(sourceFile.fileName) === 'client') continue;
 
     const visit = (node: ts.Node): void => {

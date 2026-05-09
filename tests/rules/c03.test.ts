@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('c03 — webhook handler missing signature verification', () => {
+describe('c03 - webhook handler missing signature verification', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

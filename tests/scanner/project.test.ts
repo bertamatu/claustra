@@ -34,7 +34,7 @@ describe('findTsConfig', () => {
   });
 
   it('throws a clear error when no tsconfig is found anywhere up the tree', () => {
-    // Use /tmp directly — guaranteed no tsconfig walking up to /
+    // Use /tmp directly - guaranteed no tsconfig walking up to /
     expect(() => findTsConfig(dir)).toThrow(/No tsconfig\.json found/);
   });
 });
