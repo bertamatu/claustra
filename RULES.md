@@ -265,6 +265,84 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 ---
 
+## A4 — Unawaited `params` or `searchParams` in Next.js 15+
+
+**What it checks:** A page, layout, route handler, or `generateMetadata`/`generateStaticParams`/`generateViewport` export accesses a property on `params` or `searchParams`, destructures them without `await`, or passes them straight into another call — when the project is on Next.js 15 or later, where these arguments became Promises.
+
+**Severity:** critical
+**Detection:** AST + TypeScript symbol resolution. Scans `app/**/{page,layout,route,loading,error,not-found,template}.{ts,tsx,js,jsx}`, finds default exports + HTTP-method exports + `generate*` exports, walks each function for references to the bound `params`/`searchParams` symbol, and classifies the parent expression.
+**Applies to:** Next.js 15 and 16. Skipped entirely when `node_modules/next/package.json` reports a major version below 15. If the version is unknown (no Next.js installed in the scanned project), the rule still runs — disable via `.claustra.json` if scanning a Next 14 project without `node_modules`.
+
+### Why it's a real problem
+
+In Next.js 15 the framework migrated `params`, `searchParams`, `cookies()`, and `headers()` from sync values to Promises. Existing code that read `params.slug` or destructured `const { slug } = params` did not break loudly: the property lookup happens on the Promise object (which has no `slug` key), and the binding silently resolves to `undefined`. Pages render with empty data; route handlers return content for the wrong record; `generateMetadata` produces titles like `undefined | My App`. TypeScript catches this when the Promise type flows in correctly — but in real-world migrations, the params type is often `any` (custom helper, untyped), or stuck on the old shape, and the bug ships.
+
+The rule complements the framework's codemod: it catches the cases the codemod missed and the cases that arrive *after* the migration — every new page a developer writes that copies an older example.
+
+### Authoritative sources
+
+- [Next.js — Async Request APIs (RFC then upgrade guide)](https://nextjs.org/blog/next-15#async-request-apis-breaking-change) — the v15 release blog post announcing `params`, `searchParams`, `cookies`, `headers`, and `draftMode` as Promises.
+- [Next.js — `params` and `searchParams` — page reference](https://nextjs.org/docs/app/api-reference/file-conventions/page#params-optional) — current API contract: `Promise<{ … }>` for both.
+- [Next.js — `generateMetadata` reference](https://nextjs.org/docs/app/api-reference/functions/generate-metadata#parameters) — confirms the same Promise shape for the metadata-generation entry point.
+- [Next.js — Route Handlers context argument](https://nextjs.org/docs/app/api-reference/file-conventions/route#context-optional) — the `{ params }` second argument to `GET`/`POST`/etc. is now `{ params: Promise<…> }`.
+- [React — `use()` reference](https://react.dev/reference/react/use) — the synchronous escape hatch for Client Components that receive a Promise prop.
+
+### Bad example
+
+```tsx
+// app/[id]/page.tsx — Next 15
+type Props = { params: Promise<{ id: string }> };
+
+export default async function ItemPage({ params }: Props) {
+  const id = params.id;            // ❌ property access on a Promise → undefined
+  const { team } = params;         // ❌ destructure without await → team is undefined
+  return <div>{id} / {team}</div>;
+}
+```
+
+```ts
+// app/api/[id]/route.ts — Next 15
+type Ctx = { params: Promise<{ id: string }> };
+
+export async function GET(_req: Request, { params }: Ctx) {
+  return new Response(params.id); // ❌ params is a Promise here
+}
+```
+
+### Fixed example
+
+```tsx
+// app/[id]/page.tsx
+type Props = { params: Promise<{ id: string }> };
+
+export default async function ItemPage({ params }: Props) {
+  const { id } = await params;     // ✅ resolve, then read
+  return <div>{id}</div>;
+}
+```
+
+```tsx
+// app/[id]/page.tsx — Client Component variant uses React's use()
+'use client';
+import { use } from 'react';
+
+export default function ItemPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);      // ✅ sync unwrap inside a Client Component
+  return <div>{id}</div>;
+}
+```
+
+### Known limitations
+
+- Re-binds via the type checker are honored: `const params = await props.params; params.x` is recognized as safe because the second `params` resolves to a different symbol than the function parameter.
+- Calls to `use(params)` are exempted regardless of where `use` was imported from. A user-defined helper named `use` would be a false negative; this is accepted to keep the React-19 path clean.
+- Passing the Promise into another function (`doStuff(params)`) is flagged once at the call site, but the rule does not chase into the callee. A helper that consumes the Promise correctly will produce a single false positive.
+- Whole-object signatures (`(props) => { props.params.x }`) are supported via property-access checks on the param symbol; one-hop only — `const p = props; p.params.x` will produce a false negative because the rule does not propagate aliases beyond the parameter symbol.
+- The rule does not inspect the type annotation. A `params` typed as `{ id: string }` (Next 14 shape) inside a Next 15 project is flagged the same as a `Promise<…>` shape — the bug is identical at runtime once the framework upgrades.
+- Fully skipped on Next.js 14 and earlier; if a project hasn't installed `next` yet (no `node_modules/next`), the rule runs and may produce findings on Next-14-shape code.
+
+---
+
 ## B1 — Non-serializable props from server to client
 
 **What it checks:** A server component passes a function (other than a Server Action), class instance, `Map`, `Set`, `Symbol`, or `BigInt` as a prop to a client component.

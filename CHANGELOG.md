@@ -2,6 +2,16 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A4 — Unawaited `params`/`searchParams` in Next.js 15+** (severity: critical). Scans `app/**/{page,layout,route,loading,error,not-found,template}.{ts,tsx,js,jsx}` for default exports, HTTP-method route handlers, and `generateMetadata`/`generateStaticParams`/`generateViewport` exports. Flags property access (`params.x`), destructure-without-await (`const { x } = params`), and pass-through (`fn(params)`) on the function-parameter symbol bound to `params` or `searchParams`. Recognizes `await params` and React's `use(params)` as safe. Skipped entirely on Next.js 14 and earlier — version detected via `node_modules/next/package.json`. See [RULES.md#a4](./RULES.md#a4--unawaited-params-or-searchparams-in-nextjs-15).
+
+### Removed
+
+- **CLAUSTRA.md** and **ROADMAP.md** were deleted as stale pre-v1.0 documentation. The "Guiding principles" and "Out of scope" tables were salvaged into CONTRIBUTING.md before deletion. No code or rule behavior changed.
+
 ## [1.1.0] — 2026-05-10
 
 Five new rules covering the security gaps the v1.0 set didn't address: leaked secrets in public env, browser-storage misuse, and the three Route Handler / middleware shapes that ship endpoints publicly when developers think they're protected. 295 tests, no breaking changes — every existing rule and reporter is unchanged.
