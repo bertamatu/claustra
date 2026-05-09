@@ -2,12 +2,19 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-05-10
+
+Two new rules covering the Next.js 14 → 15 → 16 migration: the `params` Promise change and the `'use cache'` directive going stable. Both are critical-severity because the failure modes are silent — pages that render with empty data, or one user's session served from cache to another. 318 tests, no breaking changes.
 
 ### Added
 
 - **A4 — Unawaited `params`/`searchParams` in Next.js 15+** (severity: critical). Scans `app/**/{page,layout,route,loading,error,not-found,template}.{ts,tsx,js,jsx}` for default exports, HTTP-method route handlers, and `generateMetadata`/`generateStaticParams`/`generateViewport` exports. Flags property access (`params.x`), destructure-without-await (`const { x } = params`), and pass-through (`fn(params)`) on the function-parameter symbol bound to `params` or `searchParams`. Recognizes `await params` and React's `use(params)` as safe. Skipped entirely on Next.js 14 and earlier — version detected via `node_modules/next/package.json`. See [RULES.md#a4](./RULES.md#a4--unawaited-params-or-searchparams-in-nextjs-15).
 - **D3 — `'use cache'` function reads request-scoped data** (severity: critical). Walks the AST with a `cached` flag set true inside any function or whole file marked with the `'use cache'` directive. Inside cached scope, flags calls to `cookies()` / `headers()` / `draftMode()` (resolved against `next/headers` imports), recognized auth helpers (reuses C2's `KNOWN_AUTH_NAMES` + `verify*`/`require*`-style regex), and member access on a `request`/`req` parameter for `.headers` / `.cookies` / `.url` / `.nextUrl`. The "inversion pattern" — caller resolves the request-scoped value and passes a primitive into the cached function — is naturally not flagged because the call is outside the cached scope. Skipped on Next.js 15 and earlier. See [RULES.md#d3](./RULES.md#d3--use-cache-function-reads-request-scoped-data).
+
+### Changed
+
+- **Default rule set** in `.claustra.json` now includes A4 and D3 at `error` severity. Existing configs that pin specific rules are unaffected.
+- **Package description and keywords** updated to mention the Next.js 15/16 migration coverage and add `nextjs-15`/`nextjs-16` keywords for npm discoverability.
 
 ### Removed
 
