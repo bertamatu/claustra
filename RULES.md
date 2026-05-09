@@ -195,6 +195,76 @@ export default async function Dashboard() {
 
 ---
 
+## A3 — Secret pattern in NEXT_PUBLIC_ variable
+
+**What it checks:** A `NEXT_PUBLIC_*` env variable — declared in `.env`, `.env.local`, `.env.production`, `.env.development`, or the `env` block of `next.config.{js,ts,mjs,cjs}` — holds a value that matches a known provider secret format (Stripe `sk_*`/`rk_*`, OpenAI `sk-*`, Anthropic `sk-ant-*`, AWS access key `AKIA…`, GitHub PAT `ghp_*`) or a generic high-entropy base64/hex string of ≥24 characters.
+
+**Severity:** critical
+**Detection:** env-file parser + AST walk over `next.config.*` for object-literal `env: { ... }` blocks
+**Applies to:** Next.js 13.4+ App Router (any version that honours the `NEXT_PUBLIC_` inlining contract)
+
+### Why it's a real problem
+
+Next.js inlines every `NEXT_PUBLIC_`-prefixed variable into the JavaScript bundle it sends to every visitor's browser. That contract is intentional and load-bearing — it's how client code reads public configuration like API base URLs and feature flags. But the same contract makes the prefix the single most dangerous typo in an App Router project: rename a real secret like `STRIPE_SECRET_KEY` to `NEXT_PUBLIC_STRIPE_SECRET_KEY` (intentionally to "fix a build error", or accidentally via a `.env.example` copy-paste) and the secret is now world-readable in View Source. A02 catches the *read* from client code; A3 catches the *value itself* before any client ever loads the bundle.
+
+The redaction rule for this check is non-negotiable: claustra never prints the literal value of a flagged env variable. The finding identifies the key, the file, the line, and which pattern matched — nothing else. This avoids re-leaking the secret into terminal scrollback, CI logs, JSON artifacts, or PR annotations.
+
+### Authoritative sources
+
+- [Next.js — Environment variables: bundling for the browser](https://nextjs.org/docs/app/guides/environment-variables#bundling-environment-variables-for-the-browser) — *"any variable prefixed with `NEXT_PUBLIC_` will be inlined into the JavaScript bundle that is sent to the browser. This inlining occurs at build time"*. Also: *"In order to keep server-only secrets safe, environment variables are evaluated at build time, so only environment variables actually used will be included."* — i.e. the prefix is the *only* gatekeeper.
+- [Stripe — API keys](https://docs.stripe.com/keys) — establishes the `pk_*` (publishable, safe) vs `sk_*`/`rk_*` (secret, must never appear client-side) split this rule encodes.
+- [OpenAI — Best practices for API key safety](https://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety) — establishes that the `sk-*` API key format is server-side only.
+- [Anthropic — API keys](https://docs.anthropic.com/en/api/getting-started) — establishes the `sk-ant-*` format and its server-only handling.
+- [AWS — Managing access keys for IAM users](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) — defines the `AKIA…` access-key-ID format.
+- [GitHub — Personal access token formats](https://github.blog/2021-04-05-behind-githubs-new-authentication-token-formats/) — defines the `ghp_*` token prefix.
+
+### Bad example
+
+```bash
+# .env.local
+NEXT_PUBLIC_STRIPE_KEY=sk_live_<24+ alphanumerics>     # ❌ secret in NEXT_PUBLIC_
+NEXT_PUBLIC_OPENAI=sk-proj-<long opaque key>           # ❌ inlined to browser bundle
+```
+
+```ts
+// next.config.ts
+export default {
+  env: {
+    NEXT_PUBLIC_RK: 'rk_live_<24+ alphanumerics>',     // ❌ Stripe restricted key
+  },
+};
+```
+
+### Fixed example
+
+```bash
+# .env.local — secrets stay server-side, no NEXT_PUBLIC_ prefix
+STRIPE_SECRET_KEY=sk_live_<24+ alphanumerics>
+OPENAI_API_KEY=sk-proj-<long opaque key>
+
+# Genuinely public values keep the prefix
+NEXT_PUBLIC_STRIPE_PK=pk_test_<publishable key>
+NEXT_PUBLIC_API_URL=https://api.example.com
+```
+
+```ts
+// Server-only read
+import 'server-only';
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+```
+
+### Known limitations
+
+- Pattern coverage is limited to the providers most commonly mishandled in NEXT_PUBLIC_; novel/private API key formats below the entropy threshold won't trigger.
+- Generic high-entropy detection uses Shannon entropy ≥4.5 bits/char on strings ≥24 chars matching a base64/hex character set — short or low-entropy secrets (e.g. 16-character HMAC keys) won't trigger.
+- Stripe publishable keys (`pk_test_*`/`pk_live_*`) and any value matching `pk-*` are intentionally not flagged — they are designed to ship to the browser.
+- Placeholder values (`<your-key-here>`, `xxx…`, `changeme`, `${VAR}`, empty) are skipped to avoid noise on `.env.example`-style files.
+- Values that look like URLs, UUIDs, or hostnames are skipped.
+- Only the literal string assigned in a `next.config.*` `env: {…}` block is inspected; values constructed dynamically (concatenation, function calls) are out of scope for the static check.
+- Rotating a leaked key is the *only* fix. The rule's suggestion text reflects this.
+
+---
+
 ## B1 — Non-serializable props from server to client
 
 **What it checks:** A server component passes a function (other than a Server Action), class instance, `Map`, `Set`, `Symbol`, or `BigInt` as a prop to a client component.
