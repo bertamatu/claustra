@@ -12,3 +12,7 @@ coverage/
 # version-aware rules (D2) can be tested without a real install.
 !tests/fixtures/**/node_modules/
 !tests/fixtures/**/node_modules/**
+
+# A3 fixtures need real `.env*` files to exercise the env-secret scanner.
+!tests/fixtures/**/.env
+!tests/fixtures/**/.env.*
