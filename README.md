@@ -161,6 +161,7 @@ Eleven rules across four categories. Each one cites authoritative Next.js / Reac
 - **C1** — Server Actions whose parameters reach a database write, `fetch()`, or cache invalidation without passing through a recognized validator (Zod, Valibot, Yup, ArkType, TypeBox).
 - **C2** — Server Actions that mutate without an authorization check (NextAuth `auth()`, Clerk `currentUser()`, Lucia `validateRequest()`, custom `verify*`/`require*`/`check*` helpers).
 - **C3** — Webhook route handlers (`stripe`/`svix`/`@octokit/webhooks`/`@clerk/backend`/etc., or any `route.ts` under a `/webhook(s)/` segment) that read the request body or perform a database write without calling a recognized signature verifier (`stripe.webhooks.constructEvent`, `Webhook.verify`, `verify`, or `verify*Webhook|Signature`-named helpers). Honors `if (process.env.NODE_ENV === 'development')` dev-bypass blocks.
+- **C4** — Route Handlers (`route.ts`) that pass a request-derived URL — `searchParams.get(...)`, `request.url`, `request.nextUrl.*`, or the second-arg `params` for dynamic segments — to `fetch` / `axios` / `got` / `new Request` / `new ImageResponse({ src })` without an allowlist check, a `validate*Url`-style helper, `URL(tainted, '<literal-base>')` parsing, or a hardcoded-host construction site. Catches the SSRF shape behind image-proxy and OG-renderer endpoints.
 
 **Rendering correctness (D)**
 - **D1** — Hydration mismatch risks: `Date`, `Math.random()`, browser globals in render scope, locale formatters without explicit locale.

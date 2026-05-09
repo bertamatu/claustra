@@ -16,6 +16,7 @@ const ConfigSchema = z.object({
       'c01-unvalidated-server-actions': 'error',
       'c02-unauthorized-server-actions': 'error',
       'c03-webhook-verify': 'error',
+      'c04-route-handler-ssrf': 'error',
       'd01-hydration-risks': 'error',
       'd02-caching-dynamic': 'warn',
     }),
