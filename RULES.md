@@ -593,6 +593,73 @@ export async function deletePost(input: unknown) {
 
 ---
 
+## C3 — Webhook handler missing signature verification
+
+**What it checks:** A Next.js Route Handler (`route.ts`/`route.js`) that looks like a webhook receiver — either its file path contains `/webhook/` or `/webhooks/` as a segment, or it imports from a known webhook SDK (`stripe`, `@octokit/webhooks`, `@octokit/webhooks-methods`, `svix`, `@clerk/backend`, `shopify-api-node`, `@vercel/webhooks`) — exports a `POST`/`PUT`/`PATCH` handler that reads the request body (`request.json()`/`text()`/`formData()`/`arrayBuffer()`/`blob()`) or performs a database write (`create`/`update`/`delete`/`upsert`/`insert`/`save`/`bulkWrite`/etc. on a non-builtin receiver) without anywhere in the function body calling a recognized signature verifier.
+
+**Severity:** critical
+**Detection:** AST pattern matching on Route Handler exports + recognized-verifier presence check
+**Applies to:** Next.js 13.4+ App Router
+
+### Why it's a real problem
+
+A webhook endpoint is a public HTTP POST that anyone on the internet can call. The provider sends a signature header (`Stripe-Signature`, `X-Hub-Signature-256`, `svix-signature`, etc.) computed over the raw request body using a shared secret; without verifying that signature, your handler has no way to distinguish a real provider event from a forged request. Forgery is not theoretical — the URL is in your logs, the payload shape is in the provider's public docs, and the secret needed to verify is the *only* thing standing between an attacker and arbitrary writes to your billing/auth/inventory state. December 2025 saw a wave of webhook-forgery exploits against e-commerce sites built without verification; the affected handlers all looked like the bad example below.
+
+claustra treats the handler as verified if a recognized verifier (`stripe.webhooks.constructEvent`, `Webhook.verify`, `verify`, `constructEvent`, or any `verify*Webhook|Signature`-named helper) is called *anywhere* in the function body. This matches the canonical Stripe pattern, where `request.text()` must be called *before* the verifier (the verifier needs the raw bytes). Body reads and DB writes inside an `if (process.env.NODE_ENV === 'development')` (or `!== 'production'`) block are exempt from the verifier requirement, so a dev-mode bypass does not need to plug into a real signing secret.
+
+### Authoritative sources
+
+- [Stripe — Verify webhook signatures](https://docs.stripe.com/webhooks/signatures) — *"Stripe signs the webhook events it sends to your endpoints by including a signature in each event's `Stripe-Signature` header. This allows you to verify that the events were sent by Stripe, not by a third party."* The `constructEvent` SDK call is presented as the only correct way to consume the body.
+- [GitHub — Securing webhooks](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries) — *"Without a secret, you can't verify if a webhook delivery is genuinely from GitHub. … Anyone with the URL can send malicious webhook payloads."*
+- [svix — Verifying webhooks](https://docs.svix.com/receiving/verifying-payloads/how) — *"For security reasons, it's important to verify that the request actually came from Svix. … Failing to do so can let attackers issue forged webhook calls."*
+- [OWASP — Webhook security](https://owasp.org/www-project-api-security/) (API Security Top 10, BOLA / BFLA categories applied to provider-driven endpoints) — establishes that public callback URLs without server-side verification are a recurring class of authorization failure.
+
+### Bad example
+
+```ts
+// app/api/webhooks/stripe/route.ts
+import Stripe from 'stripe';
+import { db } from '@/lib/db';
+
+export async function POST(request: Request) {
+  const event = await request.json();        // ❌ raw body parsed without verification
+  await db.subscription.create(event.data);  // ❌ writes derived from forged payload
+  return new Response('ok');
+}
+```
+
+### Fixed example
+
+```ts
+// app/api/webhooks/stripe/route.ts
+import Stripe from 'stripe';
+import { db } from '@/lib/db';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const sig = request.headers.get('stripe-signature')!;
+  const event = stripe.webhooks.constructEvent(
+    body,
+    sig,
+    process.env.STRIPE_WEBHOOK_SECRET!,
+  );
+  await db.subscription.create({ id: (event.data.object as { id: string }).id });
+  return new Response('ok');
+}
+```
+
+### Known limitations
+
+- The verifier check is presence-based: a recognized verifier called *anywhere* in the function counts. The rule does not currently model whether the verifier's output is actually used, or whether the verifier's input was the raw body. A handler that calls `verify(...)` with the wrong arguments will not be flagged.
+- Free-function `verify` from `@octokit/webhooks-methods` is recognized by name alone. A user-defined function literally named `verify` that does nothing security-relevant will silence the rule on this handler. Prefer renaming custom verifiers to a shape like `verifyWebhookSignature` so intent is explicit.
+- DB-write detection mirrors the conservative method-name set used by C1 (`create`/`update`/`delete`/`upsert`/etc., excluding `Object`/`Array`/`JSON`/etc. receivers). ORMs that use unusual mutation method names will not be flagged on the DB-write path; the body-read path still fires.
+- Only `POST`, `PUT`, and `PATCH` exports are analyzed. Webhooks delivered as `GET` (rare) are out of scope.
+- Reading the signature header (`request.headers.get('x-…-signature')`) is not by itself sufficient — the verifier function must be called.
+
+---
+
 ## D1 — Hydration mismatch risks
 
 **What it checks:** Render-scope expressions that produce different values on server vs client — `Date.now()`, `new Date()` without args, `Math.random()`, browser-only API reads, locale-dependent formatting without an explicit locale.
