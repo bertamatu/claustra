@@ -21,6 +21,7 @@ const ConfigSchema = z.object({
       'c05-middleware-coverage': 'error',
       'd01-hydration-risks': 'error',
       'd02-caching-dynamic': 'warn',
+      'd03-use-cache-request-scoped': 'error',
     }),
   extraServerOnlyModules: z.array(z.string()).default([]),
   ignore: z
