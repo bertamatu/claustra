@@ -1139,6 +1139,111 @@ export const getCatalog = async () => {
 
 ---
 
+## D5 — `revalidateTag` / `revalidatePath` / `updateTag` outside a mutation context
+
+**What it checks:** A call to `revalidateTag`, `revalidatePath`, or `updateTag` (imported from `next/cache`) sits in a context where it cannot meaningfully invalidate anything: inside a `'use cache'` function (contradictory), inside a `'use client'` file (throws), or during a Server Component render (no-ops or fights itself).
+
+**Severity:** high
+**Detection:** AST walk with a context object tracking `inUseCache`, `inUseServer`, and `inRouteHandler` flags as it descends through function-like nodes. The directive prologue of each function body is inspected; the source file's top-level directives are baked into the starting context. Calls to the imported revalidation names — resolved against the local binding produced by a `next/cache` import (so `import { revalidateTag as bust }` is followed) — are then classified by the active context. Conservative-by-default: a directive-less helper module is not flagged, because the rule cannot tell whether the helper is invoked from a Server Action (safe) or from a render path (unsafe).
+**Applies to:** Next.js 13.4+ (when `revalidateTag`/`revalidatePath` shipped). Not version-gated by this rule — the failure modes are identical across 13.4, 14, 15, and 16.
+
+### Why it's a real problem
+
+`revalidateTag` and friends are mutation primitives — they evict cached responses so the *next* request rebuilds. They only make sense in code paths that *cause* the data to change: Server Actions and Route Handlers. Calling them anywhere else fails in three distinct, increasingly-bad ways:
+
+- **Inside a Client Component**: `next/cache` is a server-only module. The import either throws at runtime (older Next.js minor versions) or is rejected by the bundler outright. Either way: dead code that broke production.
+- **During a Server Component render**: the call executes on every render, on the read path. It either silently no-ops against an unbuilt cache or it invalidates mid-render, producing two-pass output where one render reads stale data and the next doesn't. Diagnosing this from a bug report is expensive.
+- **Inside a `'use cache'` function**: contradictory. The cached function memoizes its output for reuse; invalidating from inside it fights its own caching strategy. The Next.js team has explicitly documented this as a misuse, but the call shape compiles cleanly and TypeScript can't catch it.
+
+The fix is structural, not local: move the call to the Server Action or Route Handler that performs the data mutation. Render is a read path; mutation lives elsewhere.
+
+### Authoritative sources
+
+- [Next.js — `revalidateTag` reference](https://nextjs.org/docs/app/api-reference/functions/revalidateTag) — *"`revalidateTag` only invalidates the cache when the path is next visited. This means calling `revalidateTag` with a dynamic route segment will not immediately trigger many revalidations at once. The invalidation only happens when the path is next visited."*
+- [Next.js — `revalidatePath` reference](https://nextjs.org/docs/app/api-reference/functions/revalidatePath) — same constraint surface; the function is documented for use in Server Actions and Route Handlers.
+- [Next.js — Server Actions and mutations](https://nextjs.org/docs/app/getting-started/updating-data) — establishes the mental model: mutations run in Server Actions / Route Handlers, and *those* are where invalidation belongs.
+
+### Bad example
+
+```tsx
+// app/admin/page.tsx — Server Component render
+import { revalidatePath } from 'next/cache';
+
+export default async function AdminPage() {
+  revalidatePath('/admin');                 // ❌ no-ops on render path
+  return <div>admin</div>;
+}
+```
+
+```tsx
+// app/components/RefreshButton.tsx
+'use client';
+import { revalidateTag } from 'next/cache';
+
+export const RefreshButton = () =>
+  <button onClick={() => revalidateTag('feed')}>refresh</button>;  // ❌ throws / blocked by bundler
+```
+
+```ts
+// app/lib/things.ts
+import { revalidateTag } from 'next/cache';
+export const getThings = async () => {
+  'use cache';
+  revalidateTag('things');                   // ❌ cached function invalidating itself
+  return loadThings();
+};
+```
+
+### Fixed example
+
+```ts
+// app/lib/actions.ts — file-level Server Action context
+'use server';
+import { revalidateTag, revalidatePath } from 'next/cache';
+
+export const updatePost = async (id: string) => {
+  await db.posts.update({ where: { id }, data: { /* ... */ } });
+  revalidateTag(`post-${id}`);
+  revalidatePath(`/posts/${id}`);
+};
+```
+
+```tsx
+// app/profile/page.tsx — inline `'use server'` action inside a Server Component
+import { revalidateTag } from 'next/cache';
+
+export default async function ProfilePage() {
+  const action = async (formData: FormData) => {
+    'use server';
+    await db.profile.update({ /* ... */ });
+    revalidateTag('profile');                // ✅ inside a Server Action
+  };
+  return <form action={action} />;
+}
+```
+
+```ts
+// app/api/posts/route.ts — Route Handler
+import { revalidateTag } from 'next/cache';
+
+export const POST = async (request: Request) => {
+  await handlePost(request);
+  revalidateTag('posts');                     // ✅ inside an HTTP method handler
+  return new Response('ok');
+};
+```
+
+### Known limitations
+
+- **Helper modules without directives are intentionally not flagged.** A file like `lib/cache-helpers.ts` with a `bumpFeed = () => revalidateTag('feed')` could be called from a Server Action (safe) or from a render path (unsafe); the rule cannot tell which without interprocedural analysis. Conservative-by-default applies — the bug surfaces when the helper is *called* in a flagged context (a Client Component, a render path, etc.), provided the call is direct.
+- **Interprocedural call-chain following is not implemented.** The plan describes "follow the call chain one level"; the rule presently classifies only at the call site. A wrapper inside a Server Action that delegates to a directive-less helper still works correctly (the wrapper itself is the call site), but a wrapper called from a render path will not be reported via the wrapper.
+- **Identifier resolution is via the `next/cache` import.** Star-imports (`import * as nextCache from 'next/cache'`) are not followed. Local rebinds (`import { revalidateTag as bust }`) are followed.
+- **The `'use server'` and `'use cache'` directives are matched literally on the directive prologue.** Variants like `'use server: pages'` or directive prologues that precede the target with non-string statements are not recognized.
+- **Route handlers are detected by file basename `route.{ts,tsx,js,jsx}` under an `app/` directory and by HTTP-method export name.** Custom routing structures are not covered.
+- **Top-level module code in a route file is treated as library code, not as a route handler.** Calling `revalidateTag` at module load is rare and mostly degenerate; the rule deliberately under-flags it.
+
+---
+
 ## How sources stay current
 
 Documentation, advisories, and best practices in this ecosystem change frequently. To prevent claustra from going stale:

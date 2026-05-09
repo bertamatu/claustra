@@ -153,7 +153,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Sixteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Seventeen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** - Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -178,6 +178,7 @@ Sixteen rules across four categories. Each one cites authoritative Next.js / Rea
 - **D2** - Caching & dynamic-rendering surprises: Next.js 14 ↔ 15 default-`fetch` behavior, `cookies()`/`headers()` in statically-cached routes, ISR mismatches.
 - **D3** - `'use cache'` functions that read request-scoped state (`cookies()` / `headers()` / `draftMode()`, auth helpers, `request.headers`/`cookies`/`url`). Reads the directive at file-prologue or function-body level. Recognizes the inversion pattern (caller resolves the request-scoped value, passes a primitive to the cached function). Skipped on Next.js 15 and earlier.
 - **D4** - `'use cache'` function without an explicit `cacheLife()` or `cacheTag()` from `next/cache`. Contract hygiene: the directive is documented as cached, but lifetime and invalidation are left to defaults that drift between Next.js minor versions. Default severity `warn`; skipped on Next.js 15 and earlier.
+- **D5** - `revalidateTag` / `revalidatePath` / `updateTag` from `next/cache` called outside a mutation context: inside a Client Component (throws), during a Server Component render (no-ops), or inside a `'use cache'` function (contradictory). Recognizes file-level `'use server'`, function-level `'use server'` (inline Server Actions), and HTTP-method exports of `route.ts` as the safe contexts. Conservative on directive-less helper modules.
 
 ---
 
@@ -216,7 +217,7 @@ App Router only - that's where the rules are tuned. Pages Router files in a mixe
 About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency (a few MB), which takes a few extra seconds. CI runs are network-bound for the install, scan-bound for the rest.
 
 **What about false positives?**
-Each rule has fixture-based tests (329 total across all 16 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
+Each rule has fixture-based tests (338 total across all 17 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
 
 **Do I need to install anything besides `npx claustra`?**
 Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.
