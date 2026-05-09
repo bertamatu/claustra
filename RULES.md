@@ -391,6 +391,73 @@ export default async function Page() {
 
 ---
 
+## B3 — Sensitive value written to browser storage
+
+**What it checks:** A `'use client'` file (or any module reachable from one through the import graph) writes to `localStorage.setItem` / `sessionStorage.setItem` (or the `window.<storage>.setItem` form) where the static key string matches a token/auth/credential/session pattern, or the value is `JSON.stringify(<identifier>)` for an identifier whose name suggests PII (`user`, `profile`, `account`, `session`).
+
+**Severity:** high (downgraded to medium when the value is wrapped in a `secure*`/`encrypted*`-named function not in claustra's recognized helper list).
+**Detection:** module-graph reachability + AST pattern matching
+**Applies to:** Next.js 13.4+ App Router (any browser-runtime React code)
+
+### Why it's a real problem
+
+`localStorage` and `sessionStorage` are readable by any JavaScript executing on the same origin — including XSS payloads, third-party scripts loaded for analytics or chat, malicious browser extensions, and any future first-party code. There is no `httpOnly` equivalent for browser storage. Storing an auth token there turns one stored-XSS into a full account takeover, because the attacker's payload can read the token and exfiltrate it. Storing a serialized user/profile/account object there turns the storage layer into a permanent PII liability that survives logout and tab-close, gets backed up to disk, and shows up in DevTools for anyone who picks up the laptop.
+
+### Authoritative sources
+
+- [OWASP Cheat Sheet — HTML5 Security: Local Storage](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#local-storage) — *"Do not store sensitive data such as session identifiers or PII in local storage."* The canonical recommendation against this pattern.
+- [OWASP — Session Management Cheat Sheet: Web Storage API](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#web-storage-api) — *"It is recommended not to store any sensitive information using these mechanisms."* Specifically discourages session tokens.
+- [MDN — Window: localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) — *"localStorage is similar to sessionStorage … both are subject to the same-origin policy"* and *"is accessible to any JavaScript code running on the same origin."*
+- [Auth0 — Token Storage best practices](https://auth0.com/docs/secure/security-guidance/data-security/token-storage) — *"Do not store tokens in browser local storage … browser local storage is accessible by any JavaScript running on the page."* The standard guidance from a major auth provider.
+
+### Bad example
+
+```tsx
+// components/LoginForm.tsx
+'use client';
+
+export const LoginForm = () => {
+  const handleLogin = async (form: FormData) => {
+    const res = await fetch('/api/login', { method: 'POST', body: form });
+    const { token, user } = await res.json();
+    localStorage.setItem('auth_token', token);                   // ❌ XSS-readable
+    localStorage.setItem('cachedProfile', JSON.stringify(user)); // ❌ PII in storage
+  };
+  // …
+};
+```
+
+### Fixed example
+
+```tsx
+// components/LoginForm.tsx
+'use client';
+import { useUser } from '@/lib/user-context';
+
+export const LoginForm = () => {
+  const { setUser } = useUser();
+  const handleLogin = async (form: FormData) => {
+    // Server sets the auth token as an httpOnly cookie on /api/login.
+    // The browser sends it automatically on subsequent requests; JS
+    // cannot read it.
+    const res = await fetch('/api/login', { method: 'POST', body: form });
+    const { user } = await res.json();
+    setUser(user); // ✅ in-memory React state — gone on tab close
+  };
+  // …
+};
+```
+
+### Known limitations
+
+- Detects only static string keys. A dynamic key (`localStorage.setItem(keyVar, …)`) is conservatively not flagged on key heuristics; if the value is a `JSON.stringify` of a suspect identifier it still fires.
+- Detects only direct `setItem` calls on `localStorage` / `sessionStorage` / `window.<storage>`. Aliased references (`const ls = localStorage; ls.setItem(…)`) and `globalThis.<storage>` are out of scope for v1.
+- The PII detector matches `JSON.stringify(<identifier>)` only — `JSON.stringify({ user })` shorthand or `JSON.stringify(buildPayload())` are not currently recognized.
+- The "recognized encryption helper" list is intentionally conservative; see `src/utils/known-helpers.ts`. A wrapper that performs real authenticated encryption but is not on the list will produce a medium-severity warning rather than full suppression.
+- `getItem` reads are never flagged — only writes.
+
+---
+
 ## C1 — Server Actions without input validation
 
 **What it checks:** A function with `'use server'` directive uses its parameters in a database write, filesystem write, or external `fetch` call without first passing them through a validation library (Zod, Valibot, Yup, ArkType, TypeBox) or manual type guard.
