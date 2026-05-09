@@ -5,7 +5,7 @@ import {
   matcherCovers,
 } from '../../src/utils/middleware-matcher.js';
 
-describe('matchesMatcherSource — literal patterns', () => {
+describe('matchesMatcherSource - literal patterns', () => {
   it('matches an exact literal path', () => {
     expect(matchesMatcherSource('/admin', '/admin')).toBe(true);
     expect(matchesMatcherSource('/admin', '/admin/users')).toBe(false);
@@ -13,7 +13,7 @@ describe('matchesMatcherSource — literal patterns', () => {
   });
 });
 
-describe('matchesMatcherSource — :name modifiers', () => {
+describe('matchesMatcherSource - :name modifiers', () => {
   it('matches one-or-more segments with :path*', () => {
     expect(matchesMatcherSource('/admin/:path*', '/admin')).toBe(true);
     expect(matchesMatcherSource('/admin/:path*', '/admin/users')).toBe(true);
@@ -34,7 +34,7 @@ describe('matchesMatcherSource — :name modifiers', () => {
   });
 });
 
-describe('matchesMatcherSource — raw regex groups', () => {
+describe('matchesMatcherSource - raw regex groups', () => {
   it('matches Next.js negative-lookahead pattern', () => {
     const m = '/((?!api|_next/static|_next/image|favicon.ico).*)';
     expect(matchesMatcherSource(m, '/admin')).toBe(true);
@@ -50,9 +50,9 @@ describe('matchesMatcherSource — raw regex groups', () => {
   });
 });
 
-describe('matchesMatcherSource — fallback behavior', () => {
+describe('matchesMatcherSource - fallback behavior', () => {
   it('returns true (conservative) for an unparseable pattern', () => {
-    // Unbalanced paren — bail out
+    // Unbalanced paren - bail out
     expect(matchesMatcherSource('/admin/(unclosed', '/admin')).toBe(true);
   });
 });

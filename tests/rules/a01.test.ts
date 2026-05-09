@@ -32,7 +32,7 @@ const buildContext = (extraServerOnlyModules: string[]): ProjectContext => {
   };
 };
 
-describe('a01 — server-only code reachable from client tree', () => {
+describe('a01 - server-only code reachable from client tree', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

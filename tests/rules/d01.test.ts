@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('d01 — hydration mismatch risks', () => {
+describe('d01 - hydration mismatch risks', () => {
   let findings: Finding[];
 
   beforeAll(async () => {
@@ -95,7 +95,7 @@ describe('d01 — hydration mismatch risks', () => {
     expect(findFor('components/correct-explicit-locale.tsx')).toHaveLength(0);
   });
 
-  it('does NOT flag Next.js metadata files (sitemap.ts / robots.ts) — they run server-side and never hydrate', () => {
+  it('does NOT flag Next.js metadata files (sitemap.ts / robots.ts) - they run server-side and never hydrate', () => {
     expect(findFor('app/sitemap.ts')).toHaveLength(0);
     expect(findFor('app/robots.ts')).toHaveLength(0);
   });

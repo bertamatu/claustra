@@ -1,4 +1,4 @@
-// VIOLATION A2: directive appears after an import — silently ignored by Next.js
+// VIOLATION A2: directive appears after an import - silently ignored by Next.js
 import { useState } from 'react';
 
 'use client';

@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('b02 — server data leakage to client', () => {
+describe('b02 - server data leakage to client', () => {
   let findings: Finding[];
 
   beforeAll(async () => {
@@ -62,7 +62,7 @@ describe('b02 — server data leakage to client', () => {
 
   it('flags a Prisma findUnique result without select/omit (passed as `user`)', () => {
     const f = inPage().filter((x) => x.message.includes('Whole DB record') && x.message.includes('"user"'));
-    // Three usages: fullUser, fullPost, mongoUser — all bound to the `user` prop.
+    // Three usages: fullUser, fullPost, mongoUser - all bound to the `user` prop.
     expect(f).toHaveLength(3);
   });
 
@@ -102,7 +102,7 @@ describe('b02 — server data leakage to client', () => {
 
   it('does NOT flag a Client Component rendering other Client Components (no boundary crossed)', () => {
     // ClientParent is itself 'use client' and renders <Card secret={...} {...obj} />.
-    // Both sides run in the browser — nothing crosses the boundary.
+    // Both sides run in the browser - nothing crosses the boundary.
     const f = findings.filter((x) => x.file === 'components/client-parent.tsx');
     expect(f).toHaveLength(0);
   });

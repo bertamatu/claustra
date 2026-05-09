@@ -10,7 +10,7 @@ export async function POST(request: Request): Promise<Response> {
     await db.subscription.upsert({ id: (data as { id: string }).id });
     return new Response('dev-ok');
   }
-  // Production path — forgot to verify.
+  // Production path - forgot to verify.
   const data = await request.json();
   await db.subscription.upsert({ id: (data as { id: string }).id });
   return new Response('ok');

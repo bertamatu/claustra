@@ -23,7 +23,7 @@ const SENSITIVE_URL_SEGMENTS = new Set([
 ]);
 
 // File-path segment names (route groups, kept verbatim with parens).
-// `(auth)` is intentionally excluded — Next.js's own examples use it
+// `(auth)` is intentionally excluded - Next.js's own examples use it
 // for the *unauthenticated* sign-in/sign-up flow, so flagging would
 // generate false positives.
 const SENSITIVE_GROUP_SEGMENTS = new Set([
@@ -196,9 +196,9 @@ type MiddlewareInfo = {
 // Walk an `export const config = { ... }` and extract the `matcher`
 // property value as a JS-ish runtime value, when statically known.
 // Returns:
-//   { value: <decoded> }  — readable
-//   { unreadable: true }  — dynamic (e.g. spread, identifier)
-//   undefined             — config or matcher field absent
+//   { value: <decoded> }  - readable
+//   { unreadable: true }  - dynamic (e.g. spread, identifier)
+//   undefined             - config or matcher field absent
 const extractMatcherValue = (
   sf: ts.SourceFile,
 ): { value?: unknown; unreadable?: true } | undefined => {
@@ -265,7 +265,7 @@ const decodeObject = (expr: ts.ObjectLiteralExpression): Record<string, unknown>
       out[key] = prop.initializer.text;
       continue;
     }
-    // For `has`/`missing` we don't care about contents — record presence.
+    // For `has`/`missing` we don't care about contents - record presence.
     out[key] = '<dynamic>';
   }
   return out;
@@ -368,7 +368,7 @@ const findAncestorLayouts = (
     if (layout) out.push(layout);
     const parent = path.dirname(dir);
     if (parent === dir) break;
-    // Stop ascending once we leave any `app/` tree — layouts above
+    // Stop ascending once we leave any `app/` tree - layouts above
     // `app/` aren't part of the App Router subtree.
     if (path.basename(dir) === 'app') break;
     dir = parent;
@@ -464,7 +464,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
       detail:
         `Reasons this route is sensitive: ${candidate.reasons.join('; ')}. ` +
         `${middlewareDetail} ` +
-        `The file itself does not call a recognized auth helper, and no ancestor \`layout.tsx\` calls one either. Anyone can hit this URL — including indexers and unauthenticated bots.`,
+        `The file itself does not call a recognized auth helper, and no ancestor \`layout.tsx\` calls one either. Anyone can hit this URL - including indexers and unauthenticated bots.`,
       suggestion:
         `Either (a) add a matcher entry like \`'${candidate.urlPath}/:path*'\` to \`middleware.ts\`'s \`config.matcher\` and ensure the middleware body calls \`auth()\` (or your provider's equivalent), or (b) call \`auth()\` / \`currentUser()\` / \`validateRequest()\` at the top of this ${candidate.kind === 'page' ? 'component' : 'handler'} and redirect/throw on missing session, or (c) add the auth call to a shared ancestor \`layout.tsx\` so the whole subtree inherits it.`,
     });
@@ -477,7 +477,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 export const rule: Rule = {
   id: RULE_ID,
   description:
-    'Detects sensitive Next.js App Router pages and route handlers — paths under `admin`/`dashboard`/`account`/`settings`/`billing`, files inside `(authenticated)`/`(protected)`/`(dashboard)` route groups, and route handlers that mutate or expose POST/PUT/PATCH/DELETE — that are neither covered by an auth-calling `middleware.ts` matcher nor protected by an inline `auth()` call (or one in an ancestor `layout.tsx`).',
+    'Detects sensitive Next.js App Router pages and route handlers - paths under `admin`/`dashboard`/`account`/`settings`/`billing`, files inside `(authenticated)`/`(protected)`/`(dashboard)` route groups, and route handlers that mutate or expose POST/PUT/PATCH/DELETE - that are neither covered by an auth-calling `middleware.ts` matcher nor protected by an inline `auth()` call (or one in an ancestor `layout.tsx`).',
   severity: SEVERITY,
   run,
 };

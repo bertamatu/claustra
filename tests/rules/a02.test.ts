@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('a02 — RSC pattern misuse', () => {
+describe('a02 - RSC pattern misuse', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

@@ -1,4 +1,4 @@
-// Ancestor layout for /account/* — calls auth() so all descendant
+// Ancestor layout for /account/* - calls auth() so all descendant
 // pages are considered protected.
 import { auth } from '../../lib/shims';
 

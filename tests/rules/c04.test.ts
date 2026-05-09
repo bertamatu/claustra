@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('c04 — Route Handler fetches user-controlled URL without allowlist', () => {
+describe('c04 - Route Handler fetches user-controlled URL without allowlist', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

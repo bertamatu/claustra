@@ -144,7 +144,7 @@ const collectServerActionFns = (sourceFile: ts.SourceFile): FnNode[] => {
     }
   }
 
-  // Inline 'use server' — anywhere in the file
+  // Inline 'use server' - anywhere in the file
   const visit = (node: ts.Node): void => {
     if (
       (ts.isFunctionDeclaration(node) ||
@@ -245,7 +245,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
         line,
         column,
         message: `Server Action "${name}" performs a mutation without an authorization check`,
-        detail: `Server Actions are public POST endpoints — anyone can invoke them. The mutation at line ${firstMutationLine} runs before any recognized auth call (auth(), getServerSession(), currentUser(), validateRequest(), or a verify*/require*/check*/assert*/guard*Auth|Session|User|Permission|Role|Access helper).`,
+        detail: `Server Actions are public POST endpoints - anyone can invoke them. The mutation at line ${firstMutationLine} runs before any recognized auth call (auth(), getServerSession(), currentUser(), validateRequest(), or a verify*/require*/check*/assert*/guard*Auth|Session|User|Permission|Role|Access helper).`,
         suggestion:
           'Call your auth helper (e.g. auth() / currentUser()) at the top of the action and throw on missing session before any DB/FS write.',
       });

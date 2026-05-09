@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('b03 — sensitive value written to browser storage', () => {
+describe('b03 - sensitive value written to browser storage', () => {
   let findings: Finding[];
 
   beforeAll(async () => {
@@ -101,7 +101,7 @@ describe('b03 — sensitive value written to browser storage', () => {
 
   it('does NOT flag a setItem call in a server-only file (page.tsx)', () => {
     // page.tsx contains a setItem('jwt', 'x') guarded by typeof, but the
-    // file has no 'use client' and is not reachable from one — out of scope.
+    // file has no 'use client' and is not reachable from one - out of scope.
     expect(findingsForFile('app/page.tsx')).toHaveLength(0);
   });
 

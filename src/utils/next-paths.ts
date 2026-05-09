@@ -94,7 +94,7 @@ export const isAppRouterRouteFile = (filePath: string): boolean =>
 // any name in `names`. Used by sensitive-segment detection. Route
 // groups and parallel slots are stripped before matching, but the
 // caller may also want to detect *raw* group names like
-// `(authenticated)` — supply those without parentheses to match the
+// `(authenticated)` - supply those without parentheses to match the
 // stripped form, OR pass the original file path and use
 // `fileHasSegmentName` below.
 export const urlPathHasSegment = (
