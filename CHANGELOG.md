@@ -2,6 +2,24 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [1.1.0] — 2026-05-10
+
+Five new rules covering the security gaps the v1.0 set didn't address: leaked secrets in public env, browser-storage misuse, and the three Route Handler / middleware shapes that ship endpoints publicly when developers think they're protected. 295 tests, no breaking changes — every existing rule and reporter is unchanged.
+
+### Added
+
+- **A3 — Secret pattern in `NEXT_PUBLIC_` env variable** (severity: critical). Scans `.env*` files and the `env` block of `next.config.{js,ts}` for `NEXT_PUBLIC_*` values matching known secret formats — Stripe (`sk_live_…`), OpenAI / Anthropic (`sk-…` / `sk-ant-…`), AWS access keys, GitHub tokens (`ghp_*`/`gho_*`/etc.), or generic high-entropy base64/hex blobs. The literal value is never printed in findings — just the variable name and file. See [RULES.md#a3](./RULES.md#a3--secret-pattern-in-next_public_-variable).
+- **B3 — Sensitive value written to browser storage** (severity: high; medium when wrapped in an unverifiable `secure*`/`encrypted*` helper). Flags `localStorage.setItem` / `sessionStorage.setItem` (and `[]=` shorthand) from client-tree code where the key matches `token`/`jwt`/`auth`/`session`/`secret`/etc. or the value is `JSON.stringify(user/profile/account/...)`. Suppressed when wrapped in a recognized encryption primitive (`encrypt`, `aesGcmEncrypt`, `sealData`, libsodium, jose's `CompactEncrypt`, …). See [RULES.md#b3](./RULES.md#b3--sensitive-value-written-to-browser-storage).
+- **C3 — Webhook handler missing signature verification** (severity: critical). Detects Route Handlers that look like webhook receivers — file under a `/webhook(s)/` segment OR imports from a known SDK (`stripe`, `@octokit/webhooks`, `svix`, `@clerk/backend`, `shopify-api-node`, etc.) — and reads the request body or performs a DB write without calling a recognized verifier (`stripe.webhooks.constructEvent`, `Webhook.verify`, `verify`, or any `verify*Webhook|Signature`-named helper). Honors `if (process.env.NODE_ENV === 'development')` dev-bypass blocks. See [RULES.md#c3](./RULES.md#c3--webhook-handler-missing-signature-verification).
+- **C4 — Route Handler fetches user-controlled URL without allowlist** (severity: high). Intra-handler taint analysis from request-derived sources (`searchParams.get(...)`, `request.url`, `request.nextUrl.*`, dynamic-segment `params`) into outbound HTTP sinks (`fetch`, `axios`/`got` and their `.method(...)` forms, `new Request`, `new ImageResponse({ src })`). Cleared by `validate*Url`/`check*Url`/`isAllowedUrl` helpers, allowlist `.includes()` / regex `.test()`, equality vs literal, receiver-side `.startsWith`/`.endsWith`/`.includes`/`.match` with a literal arg, or `new URL(tainted, ...)`. Exempts hardcoded-host construction (`https://api.example.com/...`, `process.env.API_BASE + tainted`). Catches the SSRF shape behind image-proxy and OG-renderer endpoints. See [RULES.md#c4](./RULES.md#c4--route-handler-fetches-user-controlled-url-without-allowlist).
+- **C5 — Sensitive route lacks middleware coverage and inline auth** (severity: high). Resolves auth coverage in the order Next.js does at runtime: middleware → inline → ancestor `layout.tsx`. Flags pages and route handlers whose URL contains `/admin`, `/dashboard`, `/account`, `/settings`, or `/billing`; files inside `(authenticated)`/`(protected)`/`(dashboard)` route groups; or route handlers exporting `POST`/`PUT`/`PATCH`/`DELETE` or performing DB/FS mutations — when none of (a) `middleware.ts` matcher coverage with a body that calls a recognized auth helper, (b) inline `auth()` / `currentUser()` / `validateRequest()` / `verify*Auth` in the route file, (c) auth call in any ancestor `layout.tsx`. Webhook handlers are exempt. The `(auth)` route group is intentionally NOT treated as sensitive (Next.js's own examples use it for the unauthenticated sign-in/sign-up flow). Models the path-to-regexp matcher subset Next.js advertises. See [RULES.md#c5](./RULES.md#c5--sensitive-route-lacks-middleware-coverage-and-inline-auth).
+
+### Changed
+
+- **Default rule set** in `.claustra.json` now includes all 13 rules at `error` severity (D2 remains `warn`). Existing configs that pin specific rules are unaffected.
+- **README "What it checks"** section reorganized by category (A/B/C/D) and updated with one-liner summaries of every new rule.
+- **`src/utils/`** gains `next-paths.ts` (App Router file path → URL path, with route-group / parallel-slot / intercepting-marker / dynamic-segment handling) and `middleware-matcher.ts` (path-to-regexp v6 subset → `RegExp` with conservative bail-out). Both have full unit-test coverage and are reusable by future rules.
+
 ## [1.0.1] — 2026-05-04
 
 ### Fixed
