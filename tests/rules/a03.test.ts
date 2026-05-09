@@ -18,7 +18,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('a03 — secret pattern in NEXT_PUBLIC_ variable', () => {
+describe('a03 - secret pattern in NEXT_PUBLIC_ variable', () => {
   let findings: Finding[];
 
   beforeAll(async () => {
@@ -167,7 +167,7 @@ describe('a03 — secret pattern in NEXT_PUBLIC_ variable', () => {
 // string concatenation so no literal Stripe-shaped string appears in
 // source. The .env file is written into a tmp dir before the rule runs.
 
-describe('a03 — Stripe-pattern detection (runtime-constructed values)', () => {
+describe('a03 - Stripe-pattern detection (runtime-constructed values)', () => {
   let tmpRoot: string;
   let findings: Finding[];
 
@@ -183,7 +183,7 @@ describe('a03 — Stripe-pattern detection (runtime-constructed values)', () => 
     );
     // A03 only reads .env*/next.config.* off rootDir; it does not require
     // a TypeScript program to fire. We still construct one because the
-    // Rule.run signature demands a ProjectContext — reuse the static
+    // Rule.run signature demands a ProjectContext - reuse the static
     // fixture's tsconfig so buildProgram has something valid to chew on.
     if (!existsSync(path.join(tmpRoot, 'app'))) mkdirSync(path.join(tmpRoot, 'app'));
     writeFileSync(

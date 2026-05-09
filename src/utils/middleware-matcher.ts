@@ -13,21 +13,21 @@
 // real `RegExp`. If we can't recognize the syntax, we conservatively
 // return a predicate that ALWAYS matches (`() => true`). This biases
 // toward false negatives (silent passes) over false positives (noisy
-// flags) — the rule's job is to flag clearly-uncovered routes.
+// flags) - the rule's job is to flag clearly-uncovered routes.
 
 const escapeRegex = (s: string): string => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 
 // Translate a path-to-regexp v6 pattern (the version Next.js bundles)
 // into a `RegExp`. Supported syntax:
 //   - literal characters
-//   - `:name` — single segment (no `/`)
-//   - `:name*` — zero or more segments (the preceding `/` is folded
+//   - `:name` - single segment (no `/`)
+//   - `:name*` - zero or more segments (the preceding `/` is folded
 //     into the parameter so `/admin/:path*` matches both `/admin` and
 //     `/admin/x/y`)
-//   - `:name+` — one or more segments (preceding `/` required)
-//   - `:name?` — optional single segment (preceding `/` folded)
-//   - `(...)` — raw regex group, embedded verbatim
-//   - `*` standalone — `(.*)` shorthand
+//   - `:name+` - one or more segments (preceding `/` required)
+//   - `:name?` - optional single segment (preceding `/` folded)
+//   - `(...)` - raw regex group, embedded verbatim
+//   - `*` standalone - `(.*)` shorthand
 //
 // We anchor with `^` and `$`.
 const compilePathPattern = (pattern: string): RegExp | null => {
@@ -73,7 +73,7 @@ const compilePathPattern = (pattern: string): RegExp | null => {
       continue;
     }
 
-    // Slash followed by a parameter — fold the slash into the param so
+    // Slash followed by a parameter - fold the slash into the param so
     // optional/repeating params don't leave a stray `/` requirement.
     if (c === '/' && pattern[i + 1] === ':') {
       const p = readParam(i + 1);
@@ -110,7 +110,7 @@ const compilePathPattern = (pattern: string): RegExp | null => {
       continue;
     }
 
-    // `*` standalone — `(.*)` shorthand.
+    // `*` standalone - `(.*)` shorthand.
     if (c === '*') {
       out += '.*';
       i++;
@@ -132,7 +132,7 @@ const compilePathPattern = (pattern: string): RegExp | null => {
 // True if `urlPath` is matched by the given matcher source string.
 // `urlPath` should be in path-to-regexp form already (as produced by
 // `fileToUrlPath`). Dynamic segments like `:id` in the URL path are
-// treated as concrete strings — we substitute a placeholder so they
+// treated as concrete strings - we substitute a placeholder so they
 // pass single-segment matchers.
 export const matchesMatcherSource = (
   source: string,
@@ -150,7 +150,7 @@ export const matchesMatcherSource = (
 // A `matcher` entry can be a string, an object `{ source, has?, … }`,
 // or an array of either. Extract the underlying `source` strings.
 // Returns `null` if the matcher value is in a shape we can't read
-// statically (e.g. a runtime computation) — caller should treat that
+// statically (e.g. a runtime computation) - caller should treat that
 // as covering everything.
 export const extractMatcherSources = (matcher: unknown): string[] | null => {
   if (typeof matcher === 'string') return [matcher];

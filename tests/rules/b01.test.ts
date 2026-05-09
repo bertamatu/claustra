@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('b01 — non-serializable props', () => {
+describe('b01 - non-serializable props', () => {
   let findings: Finding[];
 
   beforeAll(async () => {
@@ -124,18 +124,18 @@ describe('b01 — non-serializable props', () => {
 
   it('does NOT flag props passed to a server component', () => {
     // ServerCounter is NOT 'use client'. cb={() => {}} on it must not produce any finding.
-    // We can't grep by component name in findings, but total Function findings is 3 (asserted above) — implies ServerCounter wasn't counted.
+    // We can't grep by component name in findings, but total Function findings is 3 (asserted above) - implies ServerCounter wasn't counted.
     expect(true).toBe(true);
   });
 
   it('does NOT flag event handlers on intrinsic elements (A2 territory)', () => {
-    // <button onClick={() => {}}> — same reasoning: total function count of 3 implies no flag here.
+    // <button onClick={() => {}}> - same reasoning: total function count of 3 implies no flag here.
     expect(true).toBe(true);
   });
 
   it('does NOT flag a Client Component rendering other Client Components (no boundary crossed)', () => {
     // ClientParent is itself 'use client' and renders <Widget> with all sorts of
-    // non-serializable props. Both sides run in the browser — nothing crosses the boundary.
+    // non-serializable props. Both sides run in the browser - nothing crosses the boundary.
     const f = findings.filter((x) => x.file === 'components/client-parent.tsx');
     expect(f).toHaveLength(0);
   });

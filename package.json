@@ -1,7 +1,7 @@
 {
   "name": "claustra",
   "version": "1.1.0",
-  "description": "Audits Next.js App Router projects for server/client boundary violations.",
+  "description": "Audits Next.js App Router projects for server/client boundary violations and security gaps — leaked secrets, SSRF, webhook forgery, and routes that slip past `middleware.ts` matchers.",
   "license": "MIT",
   "author": "Berta Matuliauskiene <berta.codes@gmail.com>",
   "repository": {
@@ -12,6 +12,9 @@
     "nextjs",
     "rsc",
     "audit",
+    "security",
+    "ssrf",
+    "webhook",
     "server-components",
     "app-router",
     "static-analysis"

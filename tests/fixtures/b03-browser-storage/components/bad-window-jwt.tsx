@@ -1,6 +1,6 @@
 'use client';
 
-// window.localStorage variant — must be flagged identically to the
+// window.localStorage variant - must be flagged identically to the
 // bare-identifier form.
 export const BadWindowJwt = (): JSX.Element => {
   const save = (jwt: string): void => {

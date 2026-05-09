@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('c01 — server actions without input validation', () => {
+describe('c01 - server actions without input validation', () => {
   let findings: Finding[];
 
   beforeAll(async () => {
@@ -97,7 +97,7 @@ describe('c01 — server actions without input validation', () => {
 
   // ───────────── Not-a-validator ─────────────
 
-  it('treats JSON.parse as NOT a validator — input remains tainted', () => {
+  it('treats JSON.parse as NOT a validator - input remains tainted', () => {
     const f = findingsFor('jsonParseIsNotValidation');
     expect(f).toHaveLength(1);
   });

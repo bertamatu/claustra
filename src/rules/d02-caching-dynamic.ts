@@ -171,7 +171,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
             line,
             column,
             message: 'fetch() to localhost / 127.0.0.1',
-            detail: 'Localhost URLs are an anti-pattern in deployed code — they will fail in production. If this is meant to be a relative call to your own app, use a relative URL or env-driven base URL.',
+            detail: 'Localhost URLs are an anti-pattern in deployed code - they will fail in production. If this is meant to be a relative call to your own app, use a relative URL or env-driven base URL.',
             suggestion: 'Replace with a relative path (e.g., `/api/x`) or `process.env.NEXT_PUBLIC_API_URL`.',
           });
         }
@@ -187,7 +187,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
             column,
             message: `fetch() declares revalidate=${String(opts.revalidate)} inside a route declaring revalidate=${String(intent.seconds)}`,
             detail: 'Mismatched revalidate values. The lower of the two will win in practice and the other is misleading.',
-            suggestion: 'Pick one revalidation interval — the route export, or the per-fetch option — and remove the other.',
+            suggestion: 'Pick one revalidation interval - the route export, or the per-fetch option - and remove the other.',
           });
         }
 

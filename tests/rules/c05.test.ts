@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('c05 — sensitive routes lacking middleware or inline auth', () => {
+describe('c05 - sensitive routes lacking middleware or inline auth', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

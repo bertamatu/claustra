@@ -16,7 +16,7 @@ const RESOLVED_CONFIG: ResolvedConfig = {
   ignore: [],
 };
 
-describe('d02 — caching and dynamic surprises', () => {
+describe('d02 - caching and dynamic surprises', () => {
   let findings: Finding[];
 
   beforeAll(async () => {

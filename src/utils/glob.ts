@@ -1,4 +1,4 @@
-// Minimal minimatch-style glob matcher — sufficient for `.claustra.json` ignore patterns.
+// Minimal minimatch-style glob matcher - sufficient for `.claustra.json` ignore patterns.
 // Supports: `*` (anything but `/`), `**` (anything including `/`), `?` (single char), `.` literal.
 
 const escapeRegex = (s: string): string => s.replace(/[\\.+^$()|[\]{}]/g, '\\$&');

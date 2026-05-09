@@ -257,7 +257,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
       line: entry.line,
       column: entry.column,
       message: `NEXT_PUBLIC_ env "${entry.key}" holds a value matching ${match.reason} (${sourceLabel})`,
-      detail: `${match.detail} Anything assigned to a NEXT_PUBLIC_-prefixed variable is inlined into the JavaScript bundle Next.js ships to every browser visitor — making this value world-readable.`,
+      detail: `${match.detail} Anything assigned to a NEXT_PUBLIC_-prefixed variable is inlined into the JavaScript bundle Next.js ships to every browser visitor - making this value world-readable.`,
       suggestion: `Rotate the secret immediately, then move it to a non-NEXT_PUBLIC_ variable read only from server code (Server Components, Route Handlers, Server Actions, or middleware). If the value really is meant to be public, rename it so it does not match a known secret pattern.`,
     });
   };

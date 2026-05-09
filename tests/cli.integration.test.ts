@@ -48,7 +48,7 @@ describe('claustra CLI (integration)', () => {
 
   it('emits valid JSON when --reporter=json is used', () => {
     const { stdout, status } = runCli(FIXTURE, '--reporter', 'json');
-    // Status is 1 because the fixture contains real high-severity findings — that's the point.
+    // Status is 1 because the fixture contains real high-severity findings - that's the point.
     expect(status).toBe(1);
     const parsed = JSON.parse(stdout) as { findings: { ruleId: string }[] };
     expect(Array.isArray(parsed.findings)).toBe(true);
