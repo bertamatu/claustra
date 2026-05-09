@@ -1,18 +1,19 @@
 ---
 name: claustra-conventions
-description: How to write code in the claustra repo. Read before any implementation task. Pairs with CLAUSTRA.md (what to build) and RULES.md (rule definitions and authoritative sources).
+description: How to write code in the claustra repo. Read before any implementation task. Pairs with RULES.md (rule definitions and authoritative sources) and CONTRIBUTING.md (guiding principles and out-of-scope concerns).
 ---
 
 # claustra coding conventions
 
-This skill encodes *how* to write code in this repo. CLAUSTRA.md says *what* to build; this says *how*. Read both before starting any rule or feature.
+This skill encodes *how* to write code in this repo. RULES.md says *what* each rule does; CONTRIBUTING.md states the guiding principles and out-of-scope list; this skill says *how* to implement.
 
 ## Source of truth
 
-When the two docs disagree, the priority is:
+When docs disagree, the priority is:
 
-1. **CLAUSTRA.md** — locked types, CLI surface, milestones, scope
-2. **RULES.md** — rule semantics and authoritative sources (every rule must cite official Next.js/React docs or a CVE)
+1. **`src/rules/types.ts`** — the authoritative `Rule` and `Finding` shapes. Code wins over prose.
+2. **RULES.md** — rule semantics and authoritative sources (every rule must cite official Next.js/React docs or a CVE).
+3. **CONTRIBUTING.md** — guiding principles and the out-of-scope list (the canonical answer for where each non-claustra concern belongs).
 
 ## Code style
 
@@ -93,4 +94,4 @@ If a rule exceeds these, profile before adding more checks. Don't pre-optimize.
 
 ## Out of scope (don't accept these)
 
-If a proposed feature isn't about the server/client boundary in Next.js App Router, it goes in a different tool. The "Out of scope" table in CLAUSTRA.md is the canonical answer for where each non-claustra concern belongs. Re-read "Guiding principles" in CLAUSTRA.md when tempted.
+If a proposed feature isn't about the server/client boundary in Next.js App Router, it goes in a different tool. The "Out of scope" table in CONTRIBUTING.md is the canonical answer for where each non-claustra concern belongs. Re-read "Guiding principles" in CONTRIBUTING.md when tempted.

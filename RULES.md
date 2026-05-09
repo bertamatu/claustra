@@ -947,7 +947,7 @@ Documentation, advisories, and best practices in this ecosystem change frequentl
 
 - It is not a generic React or Next.js best-practices guide. It only documents what claustra checks.
 - It is not legal or compliance advice. It is engineering guidance backed by framework docs.
-- It is not exhaustive. There are many ways to write buggy Next.js code that claustra does not catch, by design — see "Out of scope" in `CLAUSTRA.md`.
+- It is not exhaustive. There are many ways to write buggy Next.js code that claustra does not catch, by design — see "Out of scope" in `CONTRIBUTING.md`.
 
 ---
 
@@ -958,7 +958,7 @@ Before opening a PR for a new rule:
 1. Find at least one *official* source (Next.js docs, React docs, or a CVE) that establishes the pattern as a real concern.
 2. Write the section using the template at the top of this file.
 3. Add at least 5 fixture tests under `tests/fixtures/<rule-id>/` covering both violations and non-violations.
-4. Confirm the rule fits within "Guiding principles" in `CLAUSTRA.md`. If the new rule isn't about the server/client boundary, it likely belongs in a different tool.
+4. Confirm the rule fits within "Guiding principles" in `CONTRIBUTING.md`. If the new rule isn't about the server/client boundary, it likely belongs in a different tool.
 5. Open the PR with a link to the source(s) in the description.
 
 Rules that ship without a section here will be rejected. No exceptions.
