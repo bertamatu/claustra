@@ -7,8 +7,9 @@ import b03 from './b03-browser-storage.js';
 import b02 from './b02-server-data-leakage.js';
 import c01 from './c01-unvalidated-server-actions.js';
 import c03 from './c03-webhook-verify.js';
+import c04 from './c04-route-handler-ssrf.js';
 import c02 from './c02-unauthorized-server-actions.js';
 import d01 from './d01-hydration-risks.js';
 import d02 from './d02-caching-dynamic.js';
 
-export const rules: Rule[] = [a01, a02, a03, b01, b02, b03, c01, c02, c03, d01, d02];
+export const rules: Rule[] = [a01, a02, a03, b01, b02, b03, c01, c02, c03, c04, d01, d02];
