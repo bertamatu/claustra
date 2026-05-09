@@ -10,6 +10,7 @@ const ConfigSchema = z.object({
       'a01-server-only-in-client': 'error',
       'a02-rsc-pattern-misuse': 'error',
       'a03-env-public-secret': 'error',
+      'a04-unawaited-params': 'error',
       'b01-non-serializable-props': 'error',
       'b03-browser-storage': 'error',
       'b02-server-data-leakage': 'error',
