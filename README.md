@@ -269,6 +269,4 @@ MIT - see [`LICENSE`](./LICENSE). Use it on any codebase, public or private. Mod
 ## Documentation
 
 - [`RULES.md`](./RULES.md) - every rule with code examples, authoritative sources (Next.js docs, React docs, CVEs), and known limitations
-- [`CLAUSTRA.md`](./CLAUSTRA.md) - full project specification (locked types, CLI surface, milestones)
-- [`ROADMAP.md`](./ROADMAP.md) - what's planned for v2+
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) - how to add or improve a rule
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) - guiding principles, out-of-scope concerns, and how to add or improve a rule
