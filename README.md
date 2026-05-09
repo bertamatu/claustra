@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
 
-> **Catches the eleven ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, or expose unauthenticated database writes.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
+> **Catches the thirteen ways a Next.js App Router project can ship secret data to visitors, crash on hydrate, expose unauthenticated database writes, or leave routes publicly accessible behind a `middleware.ts` that doesn't actually cover them.** Pure static analysis, no network calls, no API keys, no telemetry — runs entirely on your machine in a few seconds.
 
 ---
 
@@ -24,7 +24,15 @@ React hydration mismatches happen when the HTML the server sent doesn't match wh
 
 Every Server Action (a function with `'use server'`) is a public HTTP POST endpoint — anyone can call it from any browser, with any payload, regardless of what your UI lets them do. TypeScript types are erased at runtime. Without explicit validation and an authorization check, a Server Action that updates user profiles can be called by anyone to update *anyone's* profile.
 
-**claustra catches all three classes statically, before the code ever runs.**
+### 4. You ship endpoints publicly that look authenticated
+
+Three more failure modes hide behind code that *looks* protected:
+
+- **Webhook handlers without signature verification.** Your `/api/webhooks/stripe/route.ts` handler reads `request.json()` and writes to your database. Anyone with the URL — which is in your logs, in your provider's docs, indexable — can forge a payload and trigger that write. Verification is a single SDK call away, and it's the only thing standing between an attacker and arbitrary writes to your billing or auth state.
+- **Image proxies and OG renderers as SSRF gadgets.** A `/api/og/route.ts` that fetches a URL from `searchParams.get('url')` is an attacker's window into your private subnet. They aim it at `http://169.254.169.254/latest/meta-data/` and exfiltrate your AWS instance role. They aim it at `http://localhost:8000` and pivot through your internal admin panel. The fix is a hostname allowlist; without one, the handler is exploitable from the moment it ships.
+- **Routes that slip past `config.matcher`.** You add `/dashboard` pages and protect them with `middleware.ts`. Six months later someone touches the matcher and `/dashboard/billing` is no longer covered. The page renders publicly — type-check passes, layout looks right; only an unauthenticated visit reveals the gap. Add `NEXT_PUBLIC_STRIPE_KEY` containing your *secret* key, or store an auth token in `localStorage`, and the same shape repeats: code that looks correct, isn't.
+
+**claustra catches all four classes statically, before the code ever runs.**
 
 ---
 
@@ -145,7 +153,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Eleven rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Thirteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE — see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** — Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -172,17 +180,22 @@ Eleven rules across four categories. Each one cites authoritative Next.js / Reac
 
 ## How claustra compares
 
-| Capability                                            | claustra | `eslint-config-next` | TypeScript |
-| ----------------------------------------------------- | :------: | :------------------: | :--------: |
-| Static module-graph trace from every `'use client'`   |    ✅    |          ❌          |     ❌     |
-| Server-only package + `node:fs`/env leak detection    |    ✅    |        partial       |     ❌     |
-| Non-serializable props (`Date`, `Map`, class, fn)     |    ✅    |          ❌          |   partial  |
-| Sensitive-data prop leakage (DB record, secrets)      |    ✅    |          ❌          |     ❌     |
-| Server Action input-validation taint analysis         |    ✅    |          ❌          |     ❌     |
-| Server Action authorization checks                    |    ✅    |          ❌          |     ❌     |
-| Hydration-mismatch render-scope checks                |    ✅    |        partial       |     ❌     |
-| Next.js 14↔15 caching/`fetch` default differences     |    ✅    |          ❌          |     ❌     |
-| Runs locally, no API keys, no telemetry               |    ✅    |          ✅          |     ✅     |
+| Capability                                              | claustra | `eslint-config-next` | TypeScript |
+| ------------------------------------------------------- | :------: | :------------------: | :--------: |
+| Static module-graph trace from every `'use client'`     |    ✅    |          ❌          |     ❌     |
+| Server-only package + `node:fs`/env leak detection      |    ✅    |        partial       |     ❌     |
+| Secret patterns in `NEXT_PUBLIC_*` env values           |    ✅    |          ❌          |     ❌     |
+| Non-serializable props (`Date`, `Map`, class, fn)       |    ✅    |          ❌          |   partial  |
+| Sensitive-data prop leakage (DB record, secrets)        |    ✅    |          ❌          |     ❌     |
+| Auth tokens written to `localStorage` / `sessionStorage`|    ✅    |          ❌          |     ❌     |
+| Server Action input-validation taint analysis           |    ✅    |          ❌          |     ❌     |
+| Server Action authorization checks                      |    ✅    |          ❌          |     ❌     |
+| Webhook signature-verification check                    |    ✅    |          ❌          |     ❌     |
+| Route Handler SSRF taint analysis                       |    ✅    |          ❌          |     ❌     |
+| Middleware auth-coverage / `config.matcher` drift       |    ✅    |          ❌          |     ❌     |
+| Hydration-mismatch render-scope checks                  |    ✅    |        partial       |     ❌     |
+| Next.js 14↔15 caching/`fetch` default differences       |    ✅    |          ❌          |     ❌     |
+| Runs locally, no API keys, no telemetry                 |    ✅    |          ✅          |     ✅     |
 
 claustra is meant to run **alongside** `eslint-config-next` and TypeScript, not replace them. ESLint covers style and generic React rules. TypeScript catches type mismatches. claustra catches the App-Router-specific *boundary* failures — the kind that compile cleanly, pass type-check, look correct on a code review, and still ship a security bug.
 
@@ -200,7 +213,7 @@ App Router only — that's where the rules are tuned. Pages Router files in a mi
 About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency (a few MB), which takes a few extra seconds. CI runs are network-bound for the install, scan-bound for the rest.
 
 **What about false positives?**
-Each rule has fixture-based tests (about 190 total across all 8 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction — that's exactly the feedback loop that improves the rules.
+Each rule has fixture-based tests (about 295 total across all 13 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction — that's exactly the feedback loop that improves the rules.
 
 **Do I need to install anything besides `npx claustra`?**
 Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.
@@ -212,7 +225,7 @@ No. MIT-licensed, free forever, no upsell, no cloud component. The "fully local"
 If your helper's name matches `verify*Auth/Session/User/Permission/Role/Access`, `require*…`, `check*…`, `assert*…`, or `guard*…` (case-insensitive), yes. Otherwise either rename to match or open a PR adding the helper name to the recognized list.
 
 **Will it run as part of `next lint`?**
-Not in v1. claustra is a standalone CLI. An ESLint-plugin wrapper is on the v2 roadmap, and the existing CLI is meant to coexist with `next lint`/ESLint, not replace it.
+Not currently. claustra is a standalone CLI. An ESLint-plugin wrapper is on the roadmap, and the existing CLI is meant to coexist with `next lint`/ESLint, not replace it.
 
 **Can I disable specific rules or whole categories?**
 Yes — drop a `.claustra.json` next to your `package.json`:
