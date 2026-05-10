@@ -2,11 +2,18 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.6.0] — 2026-05-10
+
+Closes the React 19 hook-correctness arc opened by A5 and A6 in v1.5.0. One new rule, completing Phase 4 of the v2 plan. 376 tests, no breaking changes.
 
 ### Added
 
-- **C6 — `useActionState` dispatcher called outside `startTransition`** (severity: medium). Closes the React 19 hook-correctness arc opened by A5 and A6 in v1.5.0. The dispatcher returned by `useActionState` must run inside a transition for `isPending` to update; calling it bare from `onClick`/`useEffect` skips the transition machinery and the spinner/disabled-button UI never reflects the action running. The action still executes — only the loading-state contract is broken, which makes the bug silent in TypeScript and casual smoke testing. Detects the dispatcher symbol from `const [_, dispatch, _] = useActionState(...)` array-binding patterns where the call resolves to an import from `'react'`. Each call site is classified: inside `startTransition(...)` (either the bare React import or the second tuple element of `useTransition()`) → safe; assigned as `<form action={dispatch}>` / `<button formAction={dispatch}>` JSX attribute → safe; pass-through to a child component as a non-form attribute → conservative skip; bare call from any other context → flag. See [RULES.md#c6](./RULES.md#c6--useactionstate-dispatcher-called-outside-starttransition).
+- **C6 — `useActionState` dispatcher called outside `startTransition`** (severity: medium). The dispatcher returned by `useActionState` must run inside a transition for `isPending` to update; calling it bare from `onClick`/`useEffect` skips the transition machinery and the spinner/disabled-button UI never reflects the action running. The action still executes — only the loading-state contract is broken, which makes the bug silent in TypeScript and casual smoke testing. Detects the dispatcher symbol from `const [_, dispatch, _] = useActionState(...)` array-binding patterns where the call resolves to an import from `'react'`. Each call site is classified: inside `startTransition(...)` (either the bare React import or the second tuple element of `useTransition()`) → safe; assigned as `<form action={dispatch}>` / `<button formAction={dispatch}>` JSX attribute → safe; pass-through to a child component as a non-form attribute → conservative skip; bare call from any other context → flag. See [RULES.md#c6](./RULES.md#c6--useactionstate-dispatcher-called-outside-starttransition).
+
+### Changed
+
+- **Default rule set** in `.claustra.json` now includes C6 at `error` severity. Existing configs that pin specific rules are unaffected.
+- **Package description** updated to mention C6 in the React 19 hook-correctness section.
 
 ## [1.5.0] — 2026-05-10
 
