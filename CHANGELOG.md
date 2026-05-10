@@ -2,12 +2,19 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.5.0] — 2026-05-10
+
+Two new React 19 hook correctness rules. Both target silent-but-broken UI patterns that compile cleanly, type-check, and pass casual smoke tests — the kind of bugs that surface only after deployment when a user reports "the spinner never stops" or "the page never loads." 366 tests, no breaking changes.
 
 ### Added
 
 - **A5 — `useFormStatus` co-located with `<form>` in the same component** (severity: medium). React 19's `useFormStatus` reads form state from a *parent* `<form>`; calling it in the same component that renders the form returns `pending: false` permanently because there is no parent form in scope. Detects calls to a binding produced by `import { useFormStatus } from 'react-dom'` (honoring `as` aliases) co-located with a `<form>` JSX element at the same function scope. Same-scope check does not descend into nested function-likes — a child component defined inline that calls the hook correctly walks up to the outer form. Imports from any other module (user helpers that share the name) are not tracked. See [RULES.md#a5](./RULES.md#a5--useformstatus-co-located-with-form-in-the-same-component).
 - **A6 — `use()` called with an inline-created Promise** (severity: high). React's `use()` hook deduplicates by Promise reference; an unstable reference (created fresh on every render) produces infinite suspension. The component never commits, the Suspense fallback stays up, and the symptom is "the page never loads" with no error to debug. Detects calls to a binding produced by `import { use } from 'react'` whose first argument is either an inline expression (`fetch(...)`, `new Promise(...)`, async IIFE, `Promise.resolve(...)`) or a per-render local variable. Recognizes `useMemo([deps])` and React's `cache()` as stability wrappers, plus parameters, module-scope constants, and imported bindings as stable sources. See [RULES.md#a6](./RULES.md#a6--use-called-with-an-inline-created-promise).
+
+### Changed
+
+- **Default rule set** in `.claustra.json` now includes A5 and A6 at `error` severity. Existing configs that pin specific rules are unaffected.
+- **Package description and keywords** updated to mention React 19 hook correctness coverage and add `react-19` / `hooks` keywords for npm discoverability.
 
 ## [1.4.0] — 2026-05-10
 
