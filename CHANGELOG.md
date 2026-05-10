@@ -2,6 +2,18 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [1.4.0] — 2026-05-10
+
+False-positive cleanup on real Next.js App Router codebases. No new rules — existing rules' module-graph traversal corrected to honor the `'use server'` boundary.
+
+### Fixed
+
+- **A01 honors the `'use server'` directive as a server-side boundary.** When a Client Component imports a Server Action from a `'use server'` file, claustra previously walked the module graph through that file and flagged its server-only imports (Prisma, `node:fs`, secret env vars) as "client-reachable." This was a false positive: at build time Next.js replaces the import with a fetch stub; the file body and its transitive imports never cross into the client bundle. Both BFS sites (`src/scanner/boundary.ts` and `src/rules/a01-server-only-in-client.ts`) now skip deps whose source file has a top-level `'use server'` directive. Two regression fixtures + tests added (340 total). Other rules that consume `boundaryMap` (B01, B02, D01) automatically benefit from the corrected classification.
+
+  Real-world impact, scanned against [next-learn's `dashboard/final-example`](https://github.com/vercel/next-learn): A01 went from 3 critical findings to 0. The remaining findings against next-learn (C02 Server Actions without auth, C05 unprotected dashboard subtree, C05 `/seed` route) are all true positives the team would want to fix.
+
+  Limitation: file-level `'use server'` only. Inline (function-level) `'use server'` directives inside a Client Component file are still walked through; modeling those would require function-level granularity in the module graph and is a larger change deferred to a future release.
+
 ## [1.3.0] — 2026-05-10
 
 Closes the Next.js 16 caching-correctness arc opened by D3 in v1.2.0. Two new rules covering the rest of the `'use cache'` directive surface and the `next/cache` invalidation primitives. 338 tests, no breaking changes.
