@@ -1,3 +1,5 @@
+'use client';
+
 // Functions guarded by a `typeof window === 'undefined'` early return are
 // gated to client-side execution. claustra D1 must NOT flag any browser-global
 // reads or `new Date()` calls that appear after the guard.

@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["components"]
+  "include": ["components", "app", "lib"]
 }
