@@ -23,7 +23,7 @@ If your codebase is Next.js App Router, three things are probably true right now
 - **You adopted React 19 Server Actions.** Every Server Action is a public POST endpoint. The action ID is in the JS bundle. Anyone can `curl` it with any payload, regardless of what your UI lets them do. Without an explicit `auth()` check, a "save profile" action saves to the wrong profile.
 - **You use shadcn/ui or a similar component library.** Most components forward typed props through. When a Server Component renders one with a whole DB row, that row's `passwordHash` and `stripeCustomerId` columns ship in the page HTML to every visitor.
 
-claustra catches all three classes - and seventeen more - before they reach production. **Real numbers from a typical App Router codebase** (`a public reference codebase`, `dashboard/final-example`):
+claustra catches all three classes - and seventeen more - before they reach production. Representative output against a typical App Router codebase:
 
 ```
 $ npx claustra@latest .
@@ -39,7 +39,7 @@ claustra found 9 issues in 7 files
   …
 ```
 
-The `/seed` finding is a route that wipes and re-seeds the database - exposed at a publicly-reachable URL on every deployed copy of the tutorial. The C02 findings are three Server Actions any unauthenticated visitor can invoke to mutate data. The remaining five are dashboard pages with no auth coverage. None of these surface in a `tsc` build or a Lighthouse audit. claustra finds them in three seconds.
+A C05 finding on a public route that performs DB writes with no auth gate. C02 findings on Server Actions that mutate without an authorization check. Other C05 findings on dashboard pages without middleware coverage or inline auth. None of these surface in a `tsc` build or a Lighthouse audit. claustra finds them in three seconds.
 
 ---
 
@@ -277,7 +277,7 @@ App Router only - that's where the rules are tuned. Pages-Router-only projects s
 About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency.
 
 **What about false positives?**
-Each rule has fixture-based tests (376 total across all 20 rules) covering both violations *and* non-violations. Real-world testing on `a real-world App Router codebase` and a production codebase reference template drove a dedicated false-positive cleanup release (v1.4.0) that tightened A01, B01, B02, and D01. If you find a false positive on real code, please open an issue with a minimal reproduction.
+Each rule has fixture-based tests (379 total across all 20 rules) covering both violations *and* non-violations. Real-world scans against production App Router codebases drove a dedicated false-positive cleanup release (v1.4.0) tightening A01, B01, B02, and D01, plus a follow-up v1.6.1 cleanup for D01. If you find a false positive on real code, please open an issue with a minimal reproduction.
 
 **Do I need to install anything besides `npx claustra`?**
 Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.

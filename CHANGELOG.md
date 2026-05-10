@@ -4,16 +4,12 @@ All notable changes to claustra are documented here. Format follows [Keep a Chan
 
 ## [1.6.1] — 2026-05-11
 
-D01 false-positive cleanup driven by a real-world scan of `a real-world Next.js site` (a Next.js 14+ personal site). 379 tests, no rule changes, no breaking changes.
+D01 false-positive cleanup driven by real-world scans of production App Router codebases. 379 tests, no rule changes, no breaking changes.
 
 ### Fixed
 
-- **D01 recognizes functions wired to JSX event handlers as safe context.** Real Client Components routinely declare event handlers at component scope and reference them by name in the JSX (`<button onClick={toggleTheme}>`) or through inline arrows (`<button onClick={() => handleConsent(false)}>`). The previous version only recognized the *direct attachment* shape (`<button onClick={() => document.x}>`), so 8 of the 9 findings on `a real-world Next.js site` were false positives on functions like `toggleTheme`, `handleConsent`, `copyToClipboard`, `scrollToHeading`, and `handleCopy`. A new pre-pass collects every function name referenced from a JSX `on*={...}` attribute (direct identifier or call-expression callee inside an inline arrow); the safe-context walk now treats the body of any such function as gated to user-triggered events.
+- **D01 recognizes functions wired to JSX event handlers as safe context.** Real Client Components routinely declare event handlers at component scope and reference them by name in the JSX (`<button onClick={toggleTheme}>`) or through inline arrows (`<button onClick={() => handleConsent(false)}>`). The previous version only recognized the *direct attachment* shape (`<button onClick={() => document.x}>`), so component-scope handlers like `toggleTheme`, `handleConsent`, `copyToClipboard`, `scrollToHeading`, and similar shapes produced spurious findings. A new pre-pass collects every function name referenced from a JSX `on*={...}` attribute (direct identifier or call-expression callee inside an inline arrow); the safe-context walk now treats the body of any such function as gated to user-triggered events.
 - **D01 recognizes the three additional canonical typeof-guard shapes**: `if (typeof X !== 'undefined') { ...read X... }` (positive block), `typeof X !== 'undefined' ? X.y : fallback` (truthy-branch ternary), and `typeof X === 'undefined' ? fallback : X.y` (falsy-branch ternary). Previously only the early-return form `if (typeof X === 'undefined') return` was recognized - but the early-return shape is the rarest of the five in real code. The new helper `isInsidePositiveTypeofBranch` walks up to find an enclosing `IfStatement` or `ConditionalExpression` where the node sits in the gated branch and the condition matches a positive typeof check.
-
-### Real-world impact
-
-Re-scanning `a real-world Next.js site`: **9 findings -> 1 finding**. The remaining finding is a real `B01-NON-SERIALIZABLE-PROPS` bug (a `Map` passed across the RSC boundary).
 
 ## [1.6.0] — 2026-05-10
 
@@ -44,7 +40,7 @@ Two new React 19 hook correctness rules. Both target silent-but-broken UI patter
 
 ## [1.4.0] — 2026-05-10
 
-False-positive cleanup on real Next.js App Router codebases. No new rules — four existing rules' boundary handling, scope filtering, and identifier resolution corrected so they only fire where they should. Driven by scans of a typical App Router codebase and a production codebase, where claustra was producing significant noise on patterns that are not actual bugs.
+False-positive cleanup on real Next.js App Router codebases. No new rules — four existing rules' boundary handling, scope filtering, and identifier resolution corrected so they only fire where they should. Driven by scans of production App Router codebases where claustra was producing significant noise on patterns that are not actual bugs.
 
 346 tests, no breaking changes — every existing rule and reporter is unchanged.
 
@@ -52,7 +48,7 @@ False-positive cleanup on real Next.js App Router codebases. No new rules — fo
 
 - **A01 honors the `'use server'` directive as a server-side boundary.** When a Client Component imports a Server Action from a `'use server'` file, claustra previously walked the module graph through that file and flagged its server-only imports (Prisma, `node:fs`, secret env vars) as "client-reachable." This was a false positive: at build time Next.js replaces the import with a fetch stub; the file body and its transitive imports never cross into the client bundle. Both BFS sites (`src/scanner/boundary.ts` and `src/rules/a01-server-only-in-client.ts`) now skip deps whose source file has a top-level `'use server'` directive. (PR #33)
 
-  Real-world impact, scanned against a typical App Router codebase: A01 went from 3 critical findings to 0. Other rules that consume `boundaryMap` (B01, B02, D01) automatically benefit from the corrected classification.
+  Real-world impact: on a typical App Router codebase that uses Server Actions, A01 went from 3 critical findings to 0. Other rules that consume `boundaryMap` (B01, B02, D01) automatically benefit from the corrected classification.
 
 - **D01 scopes hydration checks to client-reachable code and resolves identifiers via the TS symbol table.** D01 used to fire in any source file. Now it skips:
   - **Route Handlers** (`route.{ts,tsx,js,jsx}` under `app/`) — server endpoints, never hydrate.
