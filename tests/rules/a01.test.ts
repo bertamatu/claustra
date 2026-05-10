@@ -133,6 +133,21 @@ describe('a01 - server-only code reachable from client tree', () => {
     expect(findFor('components/correct-client.tsx')).toHaveLength(0);
   });
 
+  it("does NOT flag a Client Component that imports a Server Action ('use server' boundary)", () => {
+    // A `'use server'` file becomes an RPC stub on the client side at build
+    // time. The actual code and its transitive imports stay server-only,
+    // even when imported from a `'use client'` file.
+    expect(findFor('components/correct-imports-server-action.tsx')).toHaveLength(0);
+  });
+
+  it("does NOT flag a Server Action's own server-only imports (node:fs, env, prisma chain)", () => {
+    // Regression for the false positive surfaced when scanning real Next.js
+    // App Router projects: claustra previously walked the module graph
+    // through Server Action files and flagged their server-only deps as
+    // "client-reachable."
+    expect(findFor('app/actions/update.ts')).toHaveLength(0);
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('every finding carries an importChain rooted at a client file', () => {

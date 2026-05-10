@@ -82,6 +82,11 @@ const collectClientReachableParents = (
     if (!deps) continue;
     for (const dep of deps) {
       if (parents.has(dep)) continue;
+      // Server Action boundary: a `'use server'` file becomes an RPC stub on
+      // the client side. The actual file and its transitive imports are
+      // server-only, even when imported from a Client Component.
+      const depSf = ctx.program.getSourceFile(dep);
+      if (depSf && hasDirective(depSf, 'use server')) continue;
       parents.set(dep, file);
       queue.push(dep);
     }
