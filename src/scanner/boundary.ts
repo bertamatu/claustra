@@ -28,10 +28,16 @@ export const classifyBoundaries = (
     if (reachableFromClient.has(file)) continue;
     reachableFromClient.add(file);
     const deps = graph.get(file);
-    if (deps) {
-      for (const dep of deps) {
-        if (!reachableFromClient.has(dep)) queue.push(dep);
-      }
+    if (!deps) continue;
+    for (const dep of deps) {
+      if (reachableFromClient.has(dep)) continue;
+      // Server Action boundary: a `'use server'` file is the source side of an
+      // RPC stub. The actual code is only invoked by the server runtime; the
+      // client bundle receives a thin wrapper, not the file's contents or its
+      // transitive imports. Stop the BFS here.
+      const depSf = program.getSourceFile(dep);
+      if (depSf && hasDirective(depSf, 'use server')) continue;
+      queue.push(dep);
     }
   }
 
