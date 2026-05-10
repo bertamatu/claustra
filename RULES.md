@@ -343,6 +343,70 @@ export default function ItemPage({ params }: { params: Promise<{ id: string }> }
 
 ---
 
+## A5 — `useFormStatus` co-located with `<form>` in the same component
+
+**What it checks:** A component imports `useFormStatus` from `react-dom` and calls it in the same function body that also renders a `<form>` JSX element. The React 19 hook reads form state from a *parent* `<form>` ancestor — colocating it with the form makes the hook return `pending: false` permanently because the form is a sibling/descendant, not an ancestor.
+
+**Severity:** medium
+**Detection:** AST scan. For each source file, collect local binding names produced by `import { useFormStatus } from 'react-dom'` (honoring `as` aliases). For each function-like node in the file, walk its body without descending into nested function-likes and count (a) calls to a tracked binding name and (b) `<form>` JSX elements at the same scope. If both counts are non-zero, flag every hook call site in that scope.
+**Applies to:** React 19+. Imports from `'react-dom'` are the gate; if the module specifier is anything else (a user helper that happens to share the name), the rule does nothing.
+
+### Why it's a real problem
+
+`useFormStatus` is the React 19 primitive that lets a button (or any descendant) read its parent form's pending/data/method/action state without prop drilling. The key word is *parent*: the hook walks up the React tree looking for the nearest `<form>` element, and only that form's state is visible. When the hook and the form sit in the same component, the form is not yet rendered when the hook is called — there is no parent form in scope — so the hook returns the default `{ pending: false, data: null, method: null, action: null }` forever. The submit button stays enabled, the spinner never shows, and the bug doesn't surface in TypeScript or in casual smoke testing because the form still works; only the *pending UI* is silently broken.
+
+The fix is structural: extract the component that consumes the hook (typically a submit button or a status indicator) into its own component, render it as a *child* of the `<form>`, and let the hook walk up to find the form ancestor.
+
+### Authoritative sources
+
+- [React — `useFormStatus` reference](https://react.dev/reference/react-dom/hooks/useFormStatus) — *"`useFormStatus` will only return status information for a parent `<form>`. It will not return status information for any `<form>` rendered in that same component or children components."*
+- [React — Forms guide](https://react.dev/reference/react-dom/components/form#display-a-pending-state-during-form-submission) — recommended SubmitButton extraction pattern.
+
+### Bad example
+
+```tsx
+'use client';
+import { useFormStatus } from 'react-dom';
+
+export const InlineForm = () => {
+  const { pending } = useFormStatus(); // ❌ no parent form in this scope
+  return (
+    <form action={save}>
+      <input name="x" />
+      <button type="submit" disabled={pending}>save</button>
+    </form>
+  );
+};
+```
+
+### Fixed example
+
+```tsx
+'use client';
+import { useFormStatus } from 'react-dom';
+
+const SubmitButton = () => {
+  const { pending } = useFormStatus(); // ✅ reads from the outer <form>
+  return <button type="submit" disabled={pending}>save</button>;
+};
+
+export const Form = () => (
+  <form action={save}>
+    <input name="x" />
+    <SubmitButton />
+  </form>
+);
+```
+
+### Known limitations
+
+- The "same scope" check is per-function: nested function-like nodes are not descended into. This is intentional — a child component defined inline that calls `useFormStatus()` correctly reads from the outer form, so the rule must not pick up its hook call against the parent's form.
+- A `<form>` rendered conditionally that's the parent of the hook call site at runtime (`{cond ? <form>...{useFormStatus call site}...</form> : null}` style) is still flagged. The rule cannot tell whether the conditional resolves to a parent-of-hook configuration; it defaults to flagging because the colocation shape is itself a smell.
+- The import source is matched against `'react-dom'` literally. If a user re-exports `useFormStatus` from a wrapper module (`'@/lib/react-dom-shim'`), the rule misses the re-export — but the wrapper file itself, if it imports from `'react-dom'`, would still get its own bindings tracked.
+- The rule runs on every source file, regardless of boundary classification. The hook is a Client-Component-only primitive; calling it from a Server Component is itself an A2 concern. A5 does not duplicate that check.
+
+---
+
 ## B1 — Non-serializable props from server to client
 
 **What it checks:** A server component passes a function (other than a Server Action), class instance, `Map`, `Set`, `Symbol`, or `BigInt` as a prop to a client component.
