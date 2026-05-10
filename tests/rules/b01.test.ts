@@ -140,6 +140,15 @@ describe('b01 - non-serializable props', () => {
     expect(f).toHaveLength(0);
   });
 
+  it("does NOT flag a non-directive component reachable from 'use client' (boundary 'either')", () => {
+    // `either-helper.tsx` has no `'use client'` but is imported by `client-parent.tsx`.
+    // The boundary classifier marks it as 'either' - in Next.js, once a module is
+    // pulled into the client bundle by a directive boundary, it executes in the
+    // client tree, so its function props don't cross any boundary.
+    const f = findings.filter((x) => x.file === 'components/either-helper.tsx');
+    expect(f).toHaveLength(0);
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('every finding has the correct rule id and a 1-based location', () => {
