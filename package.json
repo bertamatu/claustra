@@ -1,7 +1,7 @@
 {
   "name": "claustra",
-  "version": "1.4.0",
-  "description": "Audits Next.js App Router projects for server/client boundary violations and security gaps — leaked secrets, SSRF, webhook forgery, routes that slip past `middleware.ts` matchers, unawaited Next.js 15 `params`/`searchParams`, and the full Next.js 16 caching-correctness surface (`'use cache'` poisoning, missing `cacheLife`/`cacheTag`, mis-placed `revalidateTag`).",
+  "version": "1.5.0",
+  "description": "Audits Next.js App Router projects for server/client boundary violations and security gaps — leaked secrets, SSRF, webhook forgery, routes that slip past `middleware.ts` matchers, unawaited Next.js 15 `params`/`searchParams`, the full Next.js 16 caching-correctness surface (`'use cache'` poisoning, missing `cacheLife`/`cacheTag`, mis-placed `revalidateTag`), and React 19 hook correctness (`useFormStatus` colocation, `use()` with unstable Promise references).",
   "license": "MIT",
   "author": "Berta Matuliauskiene <berta.codes@gmail.com>",
   "repository": {
@@ -19,6 +19,8 @@
     "nextjs-16",
     "use-cache",
     "caching",
+    "react-19",
+    "hooks",
     "server-components",
     "app-router",
     "static-analysis"
