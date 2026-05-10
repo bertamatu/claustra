@@ -2,6 +2,37 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [1.4.0] — 2026-05-10
+
+False-positive cleanup on real Next.js App Router codebases. No new rules — four existing rules' boundary handling, scope filtering, and identifier resolution corrected so they only fire where they should. Driven by scans of a typical App Router codebase and a production codebase, where claustra was producing significant noise on patterns that are not actual bugs.
+
+346 tests, no breaking changes — every existing rule and reporter is unchanged.
+
+### Fixed
+
+- **A01 honors the `'use server'` directive as a server-side boundary.** When a Client Component imports a Server Action from a `'use server'` file, claustra previously walked the module graph through that file and flagged its server-only imports (Prisma, `node:fs`, secret env vars) as "client-reachable." This was a false positive: at build time Next.js replaces the import with a fetch stub; the file body and its transitive imports never cross into the client bundle. Both BFS sites (`src/scanner/boundary.ts` and `src/rules/a01-server-only-in-client.ts`) now skip deps whose source file has a top-level `'use server'` directive. (PR #33)
+
+  Real-world impact, scanned against a typical App Router codebase: A01 went from 3 critical findings to 0. Other rules that consume `boundaryMap` (B01, B02, D01) automatically benefit from the corrected classification.
+
+- **D01 scopes hydration checks to client-reachable code and resolves identifiers via the TS symbol table.** D01 used to fire in any source file. Now it skips:
+  - **Route Handlers** (`route.{ts,tsx,js,jsx}` under `app/`) — server endpoints, never hydrate.
+  - **`'use server'` files** — RPC stubs on the client side; bodies execute server-only.
+  - **Files the boundary classifier marks `'server'`** — not reachable from any `'use client'` tree.
+
+  And per-finding: `checker.getSymbolAtLocation(rootIdent)` resolves the offending identifier. If any of the symbol's declarations lives in a non-declaration file (project code — parameter, ORM column, imported binding, local var), the finding is dropped. Catches Drizzle column properties named `document`, helper functions taking a `document` parameter, and code that imports a project-local `Date` utility. (PR #35)
+
+- **B01 skips `'either'`-classified files.** B01 already skipped files explicitly marked `'use client'`. It still fired on files classified `'either'` — without the directive but reachable from a Client Component via the import graph. In Next.js, once a module is pulled into the client bundle by a `'use client'` boundary, its code executes in the client tree; a function prop passed to a Client Component child does not cross any boundary. The same reasoning that already applied to `'use client'` files now extends to `'either'`. (PR #36)
+
+- **B02 narrows the spread-prop check and skips `'either'` files.** Two fixes:
+  1. **Boundary scope** (parallel to B01): also skip `'either'`-classified files.
+  2. **Spread narrowing**: blanket-flagging every `<Primitive {...obj}/>` fired on every shadcn/ui-style wrapper, every forwarding component, every props pass-through. The dominant shape in real codebases is `(props) => <Primitive {...props} />` (or its destructured-rest variant `({ className, ...rest }) =>`), where the spread source is the wrapper's own typed parameter — not server data. The blanket-flag was replaced with a positive signal: spread is flagged only when the source resolves (via TS symbol) to a value initialized from an unfiltered Prisma/Mongoose query, mirroring the existing `valueIsWholeRecord` check used for named props. Parameter-derived sources are explicitly skipped via a new `isParameterDerived` helper that walks `BindingElement → ObjectBindingPattern` up to a `Parameter`. (PR #37)
+
+### Limitations of the cleanup
+
+- Function-level `'use server'` directives (inline Server Actions inside a Client Component file) are still walked through by A01. Modeling those would require function-level granularity in the module graph and is deferred.
+- Symbol resolution in D01 is a single-step check; an alias chain that traces back to `lib.dom.d.ts` is followed via TS's resolver, which the check honors.
+- B02's narrowed spread-flag does not catch a spread of `await fetch(...).then(r => r.json())` — extending the `valueIsWholeRecord` analysis to handle fetch chains is a future enhancement.
+
 ## [1.3.0] — 2026-05-10
 
 Closes the Next.js 16 caching-correctness arc opened by D3 in v1.2.0. Two new rules covering the rest of the `'use cache'` directive surface and the `next/cache` invalidation primitives. 338 tests, no breaking changes.
