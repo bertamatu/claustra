@@ -64,7 +64,13 @@ export default async function Page(): Promise<JSX.Element> {
       {/* Destructured field - no flag */}
       <Card name={name} />
 
-      {/* Spread - flag */}
+      {/* Spread of a whole-record query result - flag */}
+      <Card {...fullUser} />
+
+      {/* Spread of a select/omit-filtered query - no flag */}
+      <Card {...safeUser} />
+
+      {/* Spread of a static literal - no flag (no server data origin) */}
       <Card {...spreadable} />
 
       {/* Allowed plain strings */}
@@ -72,7 +78,7 @@ export default async function Page(): Promise<JSX.Element> {
 
       {/* Server component target - no flag even with sensitive name / spread */}
       <ServerCard secret={secretObj} />
-      <ServerCard {...spreadable} />
+      <ServerCard {...fullUser} />
     </main>
   );
 }
