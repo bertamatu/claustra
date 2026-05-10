@@ -2,6 +2,19 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [1.6.1] — 2026-05-11
+
+D01 false-positive cleanup driven by a real-world scan of `a real-world Next.js site` (a Next.js 14+ personal site). 379 tests, no rule changes, no breaking changes.
+
+### Fixed
+
+- **D01 recognizes functions wired to JSX event handlers as safe context.** Real Client Components routinely declare event handlers at component scope and reference them by name in the JSX (`<button onClick={toggleTheme}>`) or through inline arrows (`<button onClick={() => handleConsent(false)}>`). The previous version only recognized the *direct attachment* shape (`<button onClick={() => document.x}>`), so 8 of the 9 findings on `a real-world Next.js site` were false positives on functions like `toggleTheme`, `handleConsent`, `copyToClipboard`, `scrollToHeading`, and `handleCopy`. A new pre-pass collects every function name referenced from a JSX `on*={...}` attribute (direct identifier or call-expression callee inside an inline arrow); the safe-context walk now treats the body of any such function as gated to user-triggered events.
+- **D01 recognizes the three additional canonical typeof-guard shapes**: `if (typeof X !== 'undefined') { ...read X... }` (positive block), `typeof X !== 'undefined' ? X.y : fallback` (truthy-branch ternary), and `typeof X === 'undefined' ? fallback : X.y` (falsy-branch ternary). Previously only the early-return form `if (typeof X === 'undefined') return` was recognized - but the early-return shape is the rarest of the five in real code. The new helper `isInsidePositiveTypeofBranch` walks up to find an enclosing `IfStatement` or `ConditionalExpression` where the node sits in the gated branch and the condition matches a positive typeof check.
+
+### Real-world impact
+
+Re-scanning `a real-world Next.js site`: **9 findings -> 1 finding**. The remaining finding is a real `B01-NON-SERIALIZABLE-PROPS` bug (a `Map` passed across the RSC boundary).
+
 ## [1.6.0] — 2026-05-10
 
 Closes the React 19 hook-correctness arc opened by A5 and A6 in v1.5.0. One new rule, completing Phase 4 of the v2 plan. 376 tests, no breaking changes.
