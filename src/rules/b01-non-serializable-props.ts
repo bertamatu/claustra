@@ -256,10 +256,22 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   for (const sourceFile of ctx.program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
-    // Source files that are themselves Client Components don't cross the boundary
-    // when they render other Client Components - both sides run in the browser, so
-    // function props / Map / Date / etc. serialize fine.
-    if (ctx.boundaryMap.get(sourceFile.fileName) === 'client') continue;
+    // Only flag from `'server'` files. The boundary classification:
+    //   - `'client'`: file has top-level `'use client'`. Both parent and any
+    //     child Client Component run in the browser; function props stay in
+    //     the client bundle.
+    //   - `'either'`: file has no directive but is reachable from a `'use
+    //     client'` file. In Next.js, once a module is pulled into the client
+    //     bundle by a directive boundary, it executes in the client tree -
+    //     so when this file renders a Client Component, no boundary is
+    //     crossed. (The file may also be imported by a Server Component,
+    //     where flagging would be correct, but we can't tell statically
+    //     which path is taken at runtime; conservative-by-default favors
+    //     fewer false positives.)
+    //   - `'server'`: definitively a Server Component path; props passed to
+    //     a Client Component cross the RSC serialization boundary.
+    const boundary = ctx.boundaryMap.get(sourceFile.fileName);
+    if (boundary === 'client' || boundary === 'either') continue;
 
     const visit = (node: ts.Node): void => {
       if (ts.isJsxSelfClosingElement(node)) {
