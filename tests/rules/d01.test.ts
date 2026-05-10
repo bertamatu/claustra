@@ -108,6 +108,22 @@ describe('d01 - hydration mismatch risks', () => {
     expect(f[0]?.message).toContain('document');
   });
 
+  it('does NOT flag `new Date()` / `Date.now()` inside a Route Handler', () => {
+    // Route handlers run server-side per request and never hydrate.
+    expect(findFor('app/api/posts/route.ts')).toHaveLength(0);
+  });
+
+  it('does NOT flag a function parameter named `document` (symbol resolution)', () => {
+    // `lib/db-helpers.ts` uses `document` as a parameter name. The rule must
+    // resolve identifiers via the TS symbol table and skip when the name
+    // refers to project-level code, not the browser global.
+    expect(findFor('lib/db-helpers.ts')).toHaveLength(0);
+  });
+
+  it('does NOT flag a Client Component prop named `document`', () => {
+    expect(findFor('components/correct-document-param.tsx')).toHaveLength(0);
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('emits at least 5 distinct violation findings', () => {

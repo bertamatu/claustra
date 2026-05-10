@@ -1,3 +1,5 @@
+'use client';
+
 // VIOLATION D1: Math.random + crypto.randomUUID in render scope
 export const BadRandom = () => (
   <div>

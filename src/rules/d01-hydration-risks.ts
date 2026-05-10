@@ -1,6 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
-import { isNextMetadataFile } from '../utils/ast.js';
+import { hasDirective, isNextMetadataFile } from '../utils/ast.js';
 import type { Finding, ProjectContext, Rule, Severity } from './types.js';
 
 const RULE_ID = 'd01-hydration-risks';
@@ -231,6 +231,38 @@ const matchBrowserGlobalRead = (n: ts.Node): boolean =>
   getRootObject(n) !== undefined &&
   BROWSER_GLOBALS.has(getRootObject(n)!);
 
+const getRootIdentifierNode = (expr: ts.Expression): ts.Identifier | undefined => {
+  let cur: ts.Expression = expr;
+  while (ts.isPropertyAccessExpression(cur)) cur = cur.expression;
+  return ts.isIdentifier(cur) ? cur : undefined;
+};
+
+// Returns true if the identifier resolves (via the TS symbol table) to a
+// declaration in user/project code rather than a built-in global. We use this
+// to suppress findings where `document`, `Date`, `navigator`, etc. happen to
+// be the name of a function parameter, ORM column, imported binding, or local
+// variable - not the browser global of the same name.
+const resolvesToLocalDeclaration = (
+  ident: ts.Identifier,
+  checker: ts.TypeChecker,
+): boolean => {
+  const sym = checker.getSymbolAtLocation(ident);
+  if (!sym?.declarations) return false;
+  for (const decl of sym.declarations) {
+    if (!decl.getSourceFile().isDeclarationFile) return true;
+  }
+  return false;
+};
+
+// Route handlers under `app/` are server endpoints, not render code. Hydration
+// risks don't apply to their bodies even if the file happens to be reachable
+// from the client tree via shared utilities.
+const isAppRouteHandler = (filePath: string): boolean => {
+  const norm = filePath.replace(/\\/g, '/');
+  if (!/(^|\/)app\//.test(norm)) return false;
+  return /\/route\.(tsx?|jsx?)$/.test(norm);
+};
+
 const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   const findings: Finding[] = [];
   const rel = (f: string): string => path.relative(ctx.rootDir, f);
@@ -242,25 +274,53 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
     // opengraph-image.tsx, etc.) run server-side at build/request time and
     // never hydrate, so render-scope hydration checks don't apply.
     if (isNextMetadataFile(sourceFile)) continue;
+    // Route handlers are server endpoints; their bodies execute server-side
+    // per request and never hydrate. The new Date() / params.document patterns
+    // there are not hydration risks.
+    if (isAppRouteHandler(sourceFile.fileName)) continue;
+    // Files marked `'use server'` are RPC stubs on the client side; the
+    // declared functions execute server-only.
+    if (hasDirective(sourceFile, 'use server')) continue;
+    // Files the boundary classifier determines are unreachable from any
+    // Client Component never hydrate. Hydration-mismatch checks only matter
+    // for code that actually runs in the browser.
+    const boundary = ctx.boundaryMap.get(sourceFile.fileName);
+    if (boundary === 'server') continue;
 
     const file = rel(sourceFile.fileName);
+
+    // Suppress a finding when the root identifier of the offending expression
+    // resolves to a project-level declaration (parameter, ORM column,
+    // imported binding) rather than a built-in global. This eliminates the
+    // false positives where a Drizzle column is named `document`, a tool
+    // function takes a `document` parameter, or a wrapper imports `Date`
+    // from a custom utility.
+    const flagsTheGlobal = (rootExpr: ts.Expression): boolean => {
+      const ident = getRootIdentifierNode(rootExpr);
+      if (!ident) return true;
+      return !resolvesToLocalDeclaration(ident, ctx.checker);
+    };
 
     const visit = (node: ts.Node): void => {
       // Trigger checks
       for (const t of TRIGGERS) {
-        if (t.match(node) && !isInSafeContext(node)) {
-          const { line, column } = lineCol(sourceFile, node);
-          findings.push({
-            ruleId: RULE_ID,
-            severity: SEVERITY,
-            file,
-            line,
-            column,
-            message: t.message,
-            detail: t.detail,
-            suggestion: t.suggestion,
-          });
-        }
+        if (!t.match(node) || isInSafeContext(node)) continue;
+        const rootExpr =
+          ts.isCallExpression(node) ? node.expression :
+          ts.isNewExpression(node) ? node.expression :
+          undefined;
+        if (rootExpr && !flagsTheGlobal(rootExpr)) continue;
+        const { line, column } = lineCol(sourceFile, node);
+        findings.push({
+          ruleId: RULE_ID,
+          severity: SEVERITY,
+          file,
+          line,
+          column,
+          message: t.message,
+          detail: t.detail,
+          suggestion: t.suggestion,
+        });
       }
 
       if (matchLocaleMethodNoArgs(node) && !isInSafeContext(node)) {
@@ -277,7 +337,12 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
         });
       }
 
-      if (matchIntlDateTimeNoLocale(node) && !isInSafeContext(node)) {
+      if (
+        matchIntlDateTimeNoLocale(node) &&
+        !isInSafeContext(node) &&
+        ts.isNewExpression(node) &&
+        flagsTheGlobal(node.expression)
+      ) {
         const { line, column } = lineCol(sourceFile, node);
         findings.push({
           ruleId: RULE_ID,
@@ -291,8 +356,13 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
         });
       }
 
-      if (matchBrowserGlobalRead(node) && !isInSafeContext(node)) {
-        const root = getRootObject(node as ts.PropertyAccessExpression);
+      if (
+        matchBrowserGlobalRead(node) &&
+        !isInSafeContext(node) &&
+        ts.isPropertyAccessExpression(node) &&
+        flagsTheGlobal(node)
+      ) {
+        const root = getRootObject(node);
         const { line, column } = lineCol(sourceFile, node);
         findings.push({
           ruleId: RULE_ID,
