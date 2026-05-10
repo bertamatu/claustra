@@ -42,37 +42,73 @@ const BROWSER_GLOBAL_NAMES = new Set([
   'sessionStorage',
 ]);
 
-// Detects `if (typeof X === 'undefined') return/throw;` (or X !== 'undefined' as the `else`)
-// where X is a browser global. The pattern gates server-side execution; everything
-// after it in the same function body is client-only.
+// Returns true if `cond` is `typeof <browser-global> <op> 'undefined'` for the
+// given operator kind. Honors both strict (===, !==) and loose (==, !=) forms,
+// and either argument order.
+const matchesTypeofBrowserUndefined = (
+  cond: ts.Expression,
+  positive: boolean,
+): boolean => {
+  if (!ts.isBinaryExpression(cond)) return false;
+  const op = cond.operatorToken.kind;
+  const matchesOp = positive
+    ? op === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      op === ts.SyntaxKind.ExclamationEqualsToken
+    : op === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+      op === ts.SyntaxKind.EqualsEqualsToken;
+  if (!matchesOp) return false;
+  const oneSide = (a: ts.Expression, b: ts.Expression): boolean =>
+    ts.isTypeOfExpression(a) &&
+    ts.isIdentifier(a.expression) &&
+    BROWSER_GLOBAL_NAMES.has(a.expression.text) &&
+    ts.isStringLiteral(b) &&
+    b.text === 'undefined';
+  return oneSide(cond.left, cond.right) || oneSide(cond.right, cond.left);
+};
+
+// Detects `if (typeof X === 'undefined') return/throw;` where the body of the
+// surrounding function then runs in client-only context. This is the
+// "early-return" form of the guard.
 const isTypeofBrowserUndefinedGuard = (stmt: ts.Statement): boolean => {
   if (!ts.isIfStatement(stmt)) return false;
-
-  const matchesUndefinedCheck = (cond: ts.Expression): boolean => {
-    if (!ts.isBinaryExpression(cond)) return false;
-    const op = cond.operatorToken.kind;
-    const isEquals =
-      op === ts.SyntaxKind.EqualsEqualsEqualsToken ||
-      op === ts.SyntaxKind.EqualsEqualsToken;
-    if (!isEquals) return false;
-    const oneSide = (a: ts.Expression, b: ts.Expression): boolean =>
-      ts.isTypeOfExpression(a) &&
-      ts.isIdentifier(a.expression) &&
-      BROWSER_GLOBAL_NAMES.has(a.expression.text) &&
-      ts.isStringLiteral(b) &&
-      b.text === 'undefined';
-    return oneSide(cond.left, cond.right) || oneSide(cond.right, cond.left);
-  };
-
-  if (!matchesUndefinedCheck(stmt.expression)) return false;
-
-  // The `then` branch must early-exit (return/throw) so subsequent code is gated.
+  if (!matchesTypeofBrowserUndefined(stmt.expression, false)) return false;
   const exits = (s: ts.Statement): boolean => {
     if (ts.isReturnStatement(s) || ts.isThrowStatement(s)) return true;
     if (ts.isBlock(s)) return s.statements.some(exits);
     return false;
   };
   return exits(stmt.thenStatement);
+};
+
+// Returns true when `node` is in a branch that the surrounding `if`/ternary
+// gates to client-only execution. Covers three additional shapes beyond the
+// early-return form:
+//   - `if (typeof X !== 'undefined') { ...read... }` (positive block)
+//   - `typeof X !== 'undefined' ? X.y : fallback` (ternary, truthy branch)
+//   - `typeof X === 'undefined' ? fallback : X.y` (ternary, falsy branch)
+const isInsidePositiveTypeofBranch = (node: ts.Node): boolean => {
+  let cur: ts.Node | undefined = node;
+  while (cur !== undefined) {
+    const parent = cur.parent as ts.Node | undefined;
+    if (parent && ts.isIfStatement(parent)) {
+      if (parent.thenStatement === cur && matchesTypeofBrowserUndefined(parent.expression, true)) {
+        return true;
+      }
+      if (parent.elseStatement === cur && matchesTypeofBrowserUndefined(parent.expression, false)) {
+        return true;
+      }
+    }
+    if (parent && ts.isConditionalExpression(parent)) {
+      if (parent.whenTrue === cur && matchesTypeofBrowserUndefined(parent.condition, true)) {
+        return true;
+      }
+      if (parent.whenFalse === cur && matchesTypeofBrowserUndefined(parent.condition, false)) {
+        return true;
+      }
+    }
+    cur = parent;
+  }
+  return false;
 };
 
 // Returns true if `node` sits in a function body whose earlier statements include
@@ -102,7 +138,67 @@ const hasTypeofBrowserGuard = (node: ts.Node): boolean => {
   return false;
 };
 
-const isInSafeContext = (node: ts.Node): boolean => {
+// Returns the binding name of a function-like node when it is `function fn()`,
+// `const fn = () => ...`, `const fn = function() { ... }`, or a method.
+// Returns undefined for anonymous arrow/function expressions.
+const getFunctionLikeName = (fn: ts.Node): string | undefined => {
+  if (ts.isFunctionDeclaration(fn) && fn.name) return fn.name.text;
+  if (ts.isMethodDeclaration(fn) && ts.isIdentifier(fn.name)) return fn.name.text;
+  if (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) {
+    const parent = fn.parent;
+    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
+    }
+    if (ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
+    }
+  }
+  return undefined;
+};
+
+// Walks every JSX `on*={...}` attribute in the file and collects the names of
+// functions that are wired to those handlers - either directly
+// (`<button onClick={fn}>`) or via an inline arrow that calls them
+// (`<button onClick={() => fn()}>`). The body of any function with a name in
+// this set runs only in response to a user-triggered event, so browser-global
+// reads inside it are not hydration risks.
+const collectEventHandlerBoundNames = (sourceFile: ts.SourceFile): Set<string> => {
+  const out = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isJsxAttribute(node) &&
+      ts.isIdentifier(node.name) &&
+      /^on[A-Z]/.test(node.name.text) &&
+      node.initializer &&
+      ts.isJsxExpression(node.initializer) &&
+      node.initializer.expression
+    ) {
+      const expr = node.initializer.expression;
+      // Direct identifier: <button onClick={fn}>
+      if (ts.isIdentifier(expr)) {
+        out.add(expr.text);
+      } else {
+        // Inline arrow / function expression that calls one or more bound
+        // functions: <button onClick={() => fn(arg)}>
+        const collectCalls = (n: ts.Node): void => {
+          if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
+            out.add(n.expression.text);
+          }
+          ts.forEachChild(n, collectCalls);
+        };
+        collectCalls(expr);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return out;
+};
+
+const isInSafeContext = (
+  node: ts.Node,
+  eventHandlerBoundNames: Set<string>,
+): boolean => {
   // ts.Node.parent is typed as non-nullable in the lib, but at runtime
   // the SourceFile's parent is undefined - hence the explicit cast.
   let current = node.parent as ts.Node | undefined;
@@ -117,6 +213,21 @@ const isInSafeContext = (node: ts.Node): boolean => {
     // Inside a JSX event-handler attribute value: <button onClick={...}>
     if (ts.isJsxAttribute(current) && ts.isIdentifier(current.name) && /^on[A-Z]/.test(current.name.text)) {
       return true;
+    }
+    // Inside the body of a function that is itself wired to a JSX event
+    // handler somewhere in this file (direct reference or called from an
+    // inline-arrow handler). Real-world Client Components routinely declare
+    // event handlers at component scope and reference them by name in the
+    // JSX, e.g. `<button onClick={toggleTheme}>` or `<button onClick={() =>
+    // handleConsent(false)}>`.
+    if (
+      ts.isFunctionDeclaration(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isArrowFunction(current) ||
+      ts.isMethodDeclaration(current)
+    ) {
+      const name = getFunctionLikeName(current);
+      if (name && eventHandlerBoundNames.has(name)) return true;
     }
     // Inside an opening element with suppressHydrationWarning
     const opening =
@@ -139,6 +250,9 @@ const isInSafeContext = (node: ts.Node): boolean => {
   // After a `if (typeof window === 'undefined') return;`-style guard, all subsequent
   // browser-global reads in the same function are gated to the client.
   if (hasTypeofBrowserGuard(node)) return true;
+  // Inside the gated branch of a positive-typeof check: `if (typeof X !==
+  // 'undefined') { ...read... }`, or the corresponding ternary forms.
+  if (isInsidePositiveTypeofBranch(node)) return true;
   return suppressed;
 };
 
@@ -288,6 +402,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
     if (boundary === 'server') continue;
 
     const file = rel(sourceFile.fileName);
+    const eventHandlerBoundNames = collectEventHandlerBoundNames(sourceFile);
 
     // Suppress a finding when the root identifier of the offending expression
     // resolves to a project-level declaration (parameter, ORM column,
@@ -301,10 +416,13 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
       return !resolvesToLocalDeclaration(ident, ctx.checker);
     };
 
+    const inSafe = (node: ts.Node): boolean =>
+      isInSafeContext(node, eventHandlerBoundNames);
+
     const visit = (node: ts.Node): void => {
       // Trigger checks
       for (const t of TRIGGERS) {
-        if (!t.match(node) || isInSafeContext(node)) continue;
+        if (!t.match(node) || inSafe(node)) continue;
         const rootExpr =
           ts.isCallExpression(node) ? node.expression :
           ts.isNewExpression(node) ? node.expression :
@@ -323,7 +441,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
         });
       }
 
-      if (matchLocaleMethodNoArgs(node) && !isInSafeContext(node)) {
+      if (matchLocaleMethodNoArgs(node) && !inSafe(node)) {
         const { line, column } = lineCol(sourceFile, node);
         findings.push({
           ruleId: RULE_ID,
@@ -339,7 +457,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 
       if (
         matchIntlDateTimeNoLocale(node) &&
-        !isInSafeContext(node) &&
+        !inSafe(node) &&
         ts.isNewExpression(node) &&
         flagsTheGlobal(node.expression)
       ) {
@@ -358,7 +476,7 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
 
       if (
         matchBrowserGlobalRead(node) &&
-        !isInSafeContext(node) &&
+        !inSafe(node) &&
         ts.isPropertyAccessExpression(node) &&
         flagsTheGlobal(node)
       ) {

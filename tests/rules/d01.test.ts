@@ -124,6 +124,23 @@ describe('d01 - hydration mismatch risks', () => {
     expect(findFor('components/correct-document-param.tsx')).toHaveLength(0);
   });
 
+  it('does NOT flag browser-global reads inside a function wired to a JSX event handler', () => {
+    // `toggleTheme` is referenced as `<button onClick={toggleTheme}>`.
+    // `handleConsent` is called from `<button onClick={() => handleConsent(...)}>`.
+    // The bodies of both functions run only in response to user events.
+    expect(findFor('components/correct-event-handler-fn.tsx')).toHaveLength(0);
+  });
+
+  it('does NOT flag a positive `if (typeof X !== "undefined") { ...read... }` block', () => {
+    expect(findFor('components/correct-typeof-positive-block.tsx')).toHaveLength(0);
+  });
+
+  it('does NOT flag ternary-form typeof guards in either direction', () => {
+    // typeof X !== 'undefined' ? X.y : fallback   (truthy branch)
+    // typeof X === 'undefined' ? fallback : X.y   (falsy branch)
+    expect(findFor('components/correct-typeof-ternary.tsx')).toHaveLength(0);
+  });
+
   // ───────────── Cross-cutting ─────────────
 
   it('emits at least 5 distinct violation findings', () => {
