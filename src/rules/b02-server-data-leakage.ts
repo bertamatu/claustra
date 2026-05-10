@@ -84,6 +84,34 @@ const valueIsWholeRecord = (
   return false;
 };
 
+// True when the expression resolves to a function parameter, or to a binding
+// element (rest/destructure) that traces up to a function parameter pattern.
+// This covers the React forwarding-prop pattern: `<Primitive {...props} />`
+// where `props` is the component's own typed parameter, including the
+// destructured-rest variant `({ className, ...props }) => <Primitive {...props}/>`.
+// Spreading a parameter-derived object never originates server data; the
+// caller already supplied the value.
+const isParameterDerived = (
+  expr: ts.Expression,
+  ctx: ProjectContext,
+): boolean => {
+  if (!ts.isIdentifier(expr)) return false;
+  const sym = ctx.checker.getSymbolAtLocation(expr);
+  if (!sym?.declarations) return false;
+  for (const decl of sym.declarations) {
+    if (ts.isParameter(decl)) return true;
+    if (ts.isBindingElement(decl)) {
+      let cur: ts.Node = decl;
+      while (cur.parent !== undefined) {
+        if (ts.isParameter(cur.parent)) return true;
+        if (ts.isVariableDeclaration(cur.parent)) return false;
+        cur = cur.parent;
+      }
+    }
+  }
+  return false;
+};
+
 const checkJsxElement = (
   el: ts.JsxOpeningLikeElement,
   ctx: ProjectContext,
@@ -98,8 +126,16 @@ const checkJsxElement = (
   const file = rel(sourceFile.fileName);
 
   for (const attr of el.attributes.properties) {
-    // Spread props: any object across the boundary may carry sensitive fields.
+    // Spread props: only flag when the source clearly originates server data.
+    // The React forwarding-prop pattern - `<Primitive {...props} />` where
+    // `props` is the component's own parameter, common in shadcn/ui-style
+    // wrapper components - never crosses a server/client boundary because
+    // the caller already supplied the value (often a Client Component
+    // forwarding to another Client Component primitive). Conservative
+    // narrowing: flag spreads from a whole-record DB query, skip the rest.
     if (ts.isJsxSpreadAttribute(attr)) {
+      if (isParameterDerived(attr.expression, ctx)) continue;
+      if (!valueIsWholeRecord(attr.expression, ctx)) continue;
       const { line, column } = lineCol(sourceFile, attr);
       findings.push({
         ruleId: RULE_ID,
@@ -107,9 +143,9 @@ const checkJsxElement = (
         file,
         line,
         column,
-        message: 'Spread props passed to a Client Component',
-        detail: 'Anything spread across the server/client boundary is serialized into the page HTML/JS bundle. If the source object contains private fields (passwordHash, internal IDs, third-party keys), they leak to every visitor.',
-        suggestion: 'Replace `{...obj}` with explicit props for only the fields the UI needs.',
+        message: 'Whole DB record spread into a Client Component',
+        detail: 'Spreading a Prisma/Mongoose query result without `select` or `omit` ships every column - including private fields like `passwordHash` or internal foreign keys - into the HTML and JS sent to the browser.',
+        suggestion: 'Add `select: { ... }` (or `omit: {...}`) to the query so only the fields the UI needs cross the boundary, or destructure the safe fields explicitly into named props.',
       });
       continue;
     }
@@ -164,8 +200,12 @@ const run = async (ctx: ProjectContext): Promise<Finding[]> => {
   for (const sourceFile of ctx.program.getSourceFiles()) {
     if (sourceFile.isDeclarationFile) continue;
     if (sourceFile.fileName.includes('node_modules')) continue;
-    // Client → client renders don't cross the server/client boundary - nothing leaks.
-    if (ctx.boundaryMap.get(sourceFile.fileName) === 'client') continue;
+    // Only flag from `'server'` files. `'client'` (explicit `'use client'`)
+    // and `'either'` (no directive but reachable from a client tree) both
+    // execute in the client bundle - props passed to other Client Components
+    // do not cross any RSC serialization boundary in either case.
+    const boundary = ctx.boundaryMap.get(sourceFile.fileName);
+    if (boundary === 'client' || boundary === 'either') continue;
 
     const visit = (node: ts.Node): void => {
       if (ts.isJsxSelfClosingElement(node)) {
