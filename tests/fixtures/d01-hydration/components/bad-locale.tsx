@@ -1,3 +1,5 @@
+'use client';
+
 // VIOLATION D1: locale-dependent formatters without explicit locale
 export const BadLocale = ({ when }: { when: Date }) => (
   <div>
