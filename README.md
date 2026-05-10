@@ -153,7 +153,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Eighteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Nineteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** - Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -161,6 +161,7 @@ Eighteen rules across four categories. Each one cites authoritative Next.js / Re
 - **A3** - Secret-shaped value in a `NEXT_PUBLIC_` env variable (Stripe / OpenAI / Anthropic / AWS / GitHub formats, or high-entropy base64/hex). Scans `.env*` files and the `env` block of `next.config.{js,ts}`. Never prints the literal value.
 - **A4** - `params` or `searchParams` accessed without `await` in a Next.js 15+ page, layout, route handler, or `generateMetadata`/`generateStaticParams`. Catches `params.x`, `const { x } = params`, and pass-through into another call. Skipped on Next.js 14. Recognizes the React `use(params)` hook as a safe alternative for Client Components.
 - **A5** - `useFormStatus` from `react-dom` called in the same component that renders the `<form>`. The React 19 hook reads from a *parent* `<form>`; co-locating it returns `pending: false` permanently and the submit button never reflects the in-flight state. Tracks the local binding name (honors `import { useFormStatus as useStatus }`).
+- **A6** - `use()` from `react` called with a Promise that is created inline (`fetch(...)`, `new Promise(...)`, async IIFE, `Promise.resolve(...)`) or held in a per-render local variable. The hook deduplicates by reference; an unstable reference produces infinite suspension. Recognizes `useMemo([deps])` and React's `cache()` as stability wrappers, plus parameters, module-scope constants, and imported bindings as stable sources.
 
 **Data crossing the boundary (B)**
 - **B1** - Non-serializable props: functions, classes, `Map`/`Set`/`Symbol`/`BigInt`, raw `Date`.
@@ -218,7 +219,7 @@ App Router only - that's where the rules are tuned. Pages Router files in a mixe
 About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency (a few MB), which takes a few extra seconds. CI runs are network-bound for the install, scan-bound for the rest.
 
 **What about false positives?**
-Each rule has fixture-based tests (355 total across all 18 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
+Each rule has fixture-based tests (366 total across all 19 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
 
 **Do I need to install anything besides `npx claustra`?**
 Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.

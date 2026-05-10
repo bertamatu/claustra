@@ -407,6 +407,97 @@ export const Form = () => (
 
 ---
 
+## A6 — `use()` called with an inline-created Promise
+
+**What it checks:** A call to React's `use()` hook (imported from `react`) where the Promise argument is created fresh on every render — either inline as `use(fetch(...))` / `use(new Promise(...))` / `use((async () => ...)())`, or held in a per-render local variable initialized to a non-stable expression. The Promise reference must be stable across renders for `use()` to deduplicate; an unstable reference produces infinite suspension.
+
+**Severity:** high
+**Detection:** AST scan. For each source file, collect the local binding(s) produced by `import { use } from 'react'`. For each call to a tracked binding, classify the first argument:
+
+- **Inline expressions** (\`fetch(...)\`, \`Promise.resolve(...)\`, \`new Promise(...)\`, \`(async () => ...)()\`, any other call/new expression) → flag
+- **Identifier reference** → resolve via the TS symbol table:
+  - parameter (or destructured-rest from a parameter) → safe (caller supplied the value)
+  - variable declared at module scope → safe (one Promise per app, shared)
+  - variable declared inside a function whose initializer is a \`useMemo(...)\` / \`cache(...)\` call → safe (memoized)
+  - variable declared inside a function with any other initializer → flag (unstable-local)
+  - imported binding → safe
+- **Property access** rooted in a parameter (\`props.dataPromise\`, \`ctx.value\`) → safe
+- Anything else → no flag (conservative-by-default)
+
+**Applies to:** React 19+. Imports from \`'react'\` are the gate; if \`use\` is a project-local helper that happens to share the name, the rule does nothing.
+
+### Why it's a real problem
+
+`use()` is React 19's primitive for unwrapping a Promise inside a component, suspending until the value is ready. The implementation looks the Promise up in a per-component cache keyed by reference identity. If the Promise reference changes on every render, every render produces a fresh cache miss, every render suspends, and React never gets to commit — the component is stuck in a permanent suspending state, the parent Suspense boundary keeps showing its fallback, and the symptom is "the page never loads" with no error to debug. Storybook stories, hot-reload, and dev-mode StrictMode double-invocations all amplify the symptom inconsistently, which makes it hard to diagnose from a bug report.
+
+The fix is *reference stability*: the Promise must be a value created exactly once per render-key tuple — typically once at module scope (one per app), once inside `useMemo([deps])` (one per dep change), once via React's `cache()` for server-side memoization, or supplied by a stable parent through a prop. Any of those break the loop.
+
+### Authoritative sources
+
+- [React — `use()` reference](https://react.dev/reference/react/use) — *"`use` returns the resolved value of the resource, like a Promise or context. Unlike all other React Hooks, `use` can be called within loops and conditional statements like `if`. Like other React Hooks, the function that calls `use` must be a Component or Hook."*
+- [React — Suspense for data fetching](https://react.dev/reference/react/Suspense) — Suspense boundaries depend on stable promise references.
+- [React — `cache()` reference](https://react.dev/reference/react/cache) — recommended server-side stability primitive.
+
+### Bad example
+
+```tsx
+'use client';
+import { use } from 'react';
+
+export const Inline = () => {
+  const data = use(fetch('/api/data'));        // ❌ new Promise per render
+  return <pre>{String(data)}</pre>;
+};
+
+export const LocalVar = () => {
+  const dataPromise = fetch('/api/data');      // ❌ also new Promise per render
+  const data = use(dataPromise);
+  return <pre>{String(data)}</pre>;
+};
+
+export const Degenerate = ({ value }: { value: number }) => {
+  const v = use(Promise.resolve(value));       // ❌ Promise.resolve(...) is also fresh per render
+  return <span>{v}</span>;
+};
+```
+
+### Fixed example
+
+```tsx
+'use client';
+import { use, useMemo } from 'react';
+
+// Module scope: one Promise per app.
+const everyoneShared = fetch('/api/static');
+
+export const ModuleScope = () => {
+  const data = use(everyoneShared);            // ✅ stable reference
+  return <pre>{String(data)}</pre>;
+};
+
+// useMemo: one Promise per change of the dep tuple.
+export const Memoized = ({ id }: { id: string }) => {
+  const dataPromise = useMemo(() => fetch(`/api/data/${id}`), [id]);
+  const data = use(dataPromise);                // ✅ stable per id
+  return <pre>{String(data)}</pre>;
+};
+
+// Prop: parent owns the Promise, child just consumes.
+export const FromProp = ({ dataPromise }: { dataPromise: Promise<unknown> }) => {
+  const data = use(dataPromise);                // ✅ as stable as the parent
+  return <pre>{String(data)}</pre>;
+};
+```
+
+### Known limitations
+
+- The check is shallow: a Promise stored in a per-render local then `await`-ed via a helper that returns it is not traced through. v1 only inspects the call's direct argument.
+- React's `cache()` is recognized as a stability wrapper alongside `useMemo`. Other custom memoizers (e.g., a project-local \`useStablePromise\`) are not recognized; they would produce a false positive.
+- The argument-classifier has no fetch-chain awareness: \`use(loaderRef.current.promise)\` (an external mutable ref) is treated as `unknown` and not flagged. A subsequent enhancement could extend the property-access classifier to track refs and known stability primitives.
+- Imports from any module specifier other than `'react'` are not tracked. A user helper named `use` that's actually wrapped React's `use` via a project barrel could miss the rule; conservative-by-default applies.
+
+---
+
 ## B1 — Non-serializable props from server to client
 
 **What it checks:** A server component passes a function (other than a Server Action), class instance, `Map`, `Set`, `Symbol`, or `BigInt` as a prop to a client component.

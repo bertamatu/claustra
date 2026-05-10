@@ -12,6 +12,7 @@ const ConfigSchema = z.object({
       'a03-env-public-secret': 'error',
       'a04-unawaited-params': 'error',
       'a05-useformstatus-colocation': 'error',
+      'a06-use-inline-promise': 'error',
       'b01-non-serializable-props': 'error',
       'b03-browser-storage': 'error',
       'b02-server-data-leakage': 'error',
