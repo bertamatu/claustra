@@ -1023,6 +1023,109 @@ export default async function DashboardPage() {
 
 ---
 
+## C6 — `useActionState` dispatcher called outside `startTransition`
+
+**What it checks:** A component calls the dispatcher returned by `useActionState` from `react` directly inside an event handler / `useEffect` / arbitrary call site, without wrapping it in `startTransition(...)` and without passing it as the value of a `<form action={dispatch}>` or `<button formAction={dispatch}>` JSX attribute. The dispatcher needs the transition to run inside; calling it bare skips that machinery and `isPending` stays `false` permanently.
+
+**Severity:** medium
+**Detection:** AST scan with two phases. First pass: collect the symbol of every dispatcher binding — the second array-binding element of `const [_, dispatch, _] = useActionState(...)`, where the call's callee resolves to a name imported from `react`. Second pass: for every identifier reference to a tracked dispatcher symbol, classify the parent context:
+- Direct call \`dispatch(args)\` → flag unless an enclosing call to \`startTransition(...)\` is found anywhere up the AST chain (matching either the bare identifier or the `.startTransition` member access from a destructured \`useTransition()\` result).
+- JSX attribute initializer where the attribute name is `action` or `formAction` → safe (React schedules the transition itself).
+- JSX attribute initializer with any other name → conservative skip; the child component may forward the dispatcher to a `<form action>` correctly, and we don't chase across the component boundary.
+- Anything else (variable assignment, return, spread) → skip.
+
+**Applies to:** React 19+. Imports from `'react'` are the gate; if `useActionState` came from a project-local helper of the same name, the rule does nothing.
+
+### Why it's a real problem
+
+`useActionState` returns a `[state, dispatch, isPending]` tuple. The dispatcher's job is to invoke the action *inside a React transition*, so the returned `isPending` boolean tracks the in-flight state and the surrounding UI (a disabled button, a spinner, an animated form border) reflects that the user's submission is in progress. The transition is set up automatically when:
+- the dispatcher is passed as `<form action={dispatch}>` / `<button formAction={dispatch}>` (React schedules the transition before invoking it), or
+- the developer wraps the call in `startTransition(() => dispatch(...))` themselves.
+
+Calling the dispatcher directly from an `onClick` / `onChange` / `useEffect` / async handler still *runs* the action — the underlying server function or reducer executes, the state updates eventually — but `isPending` never flips to `true`. The user clicks "save," nothing visually responds, the action takes 800 ms, and meanwhile the user clicks again. The bug is silent in TypeScript and in casual smoke testing because the data flow still works; only the UI loading-state contract is broken.
+
+### Authoritative sources
+
+- [React — `useActionState` reference](https://react.dev/reference/react/useActionState) — *"You can also call the action by passing it to `<form action={action}>`. … React will run the action when the form is submitted, and when called via `<form action>`, React automatically wraps it in a transition."*
+- [React — `useTransition` reference](https://react.dev/reference/react/useTransition) — defines the alternate `startTransition` source.
+- [React — `<form action>` reference](https://react.dev/reference/react-dom/components/form#props) — the recommended attachment point for action dispatchers.
+
+### Bad example
+
+```tsx
+'use client';
+import { useActionState } from 'react';
+
+export const ClickyButton = () => {
+  const [state, dispatch, pending] = useActionState(updateAction, 0);
+  return (
+    <button onClick={() => dispatch(new FormData())} disabled={pending}>
+      {state}
+    </button>
+  );
+};
+```
+
+```tsx
+export const AutoRefresh = ({ id }: { id: number }) => {
+  const [state, dispatch] = useActionState(refreshAction, 0);
+  useEffect(() => {
+    dispatch(id);                              // ❌ no transition wrap
+  }, [id, dispatch]);
+  return <span>{state}</span>;
+};
+```
+
+### Fixed example
+
+```tsx
+'use client';
+import { useActionState } from 'react';
+
+// Variant A: assign as <form action> - React handles the transition.
+export const FormAction = () => {
+  const [state, dispatch, pending] = useActionState(submit, '');
+  return (
+    <form action={dispatch}>
+      <input name="x" />
+      <button type="submit" disabled={pending}>save</button>
+      <span>{state}</span>
+    </form>
+  );
+};
+```
+
+```tsx
+'use client';
+import { useActionState, startTransition } from 'react';
+
+// Variant B: explicit startTransition wrap.
+export const ManualTransition = () => {
+  const [state, dispatch, pending] = useActionState(submit, '');
+  return (
+    <button
+      disabled={pending}
+      onClick={() => {
+        startTransition(() => {
+          dispatch(new FormData());
+        });
+      }}
+    >
+      {state}
+    </button>
+  );
+};
+```
+
+### Known limitations
+
+- The transition check is a name-based ancestor walk. If a project rebinds `startTransition` under a different name (e.g., `const [pending, startT] = useTransition()`), calls inside `startT(...)` will not be recognized and the rule may produce a false positive. Codebases that destructure under the canonical name `startTransition` are covered.
+- Pass-through to a child component as a non-form attribute (`<MyButton onPress={dispatch} />`) is treated as a conservative skip — the rule does not chase across the component boundary to verify the child uses it as `<form action>`. Real bugs at the eventual call site inside the child component are caught when the rule scans that child.
+- Imports from any module specifier other than `'react'` are not tracked. A user helper named `useActionState` re-exported from a project barrel could miss the rule; conservative-by-default applies.
+- The rule does not version-gate against React. `useActionState` shipped in React 19; calling it on React 18 produces a compile-time or runtime error that surfaces independently of this rule.
+
+---
+
 ## D1 — Hydration mismatch risks
 
 **What it checks:** Render-scope expressions that produce different values on server vs client — `Date.now()`, `new Date()` without args, `Math.random()`, browser-only API reads, locale-dependent formatting without an explicit locale.

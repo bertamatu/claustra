@@ -12,6 +12,7 @@ import c01 from './c01-unvalidated-server-actions.js';
 import c03 from './c03-webhook-verify.js';
 import c04 from './c04-route-handler-ssrf.js';
 import c05 from './c05-middleware-coverage.js';
+import c06 from './c06-useactionstate-dispatch.js';
 import c02 from './c02-unauthorized-server-actions.js';
 import d01 from './d01-hydration-risks.js';
 import d02 from './d02-caching-dynamic.js';
@@ -19,4 +20,4 @@ import d03 from './d03-use-cache-request-scoped.js';
 import d04 from './d04-use-cache-missing-tags.js';
 import d05 from './d05-revalidate-outside-mutation.js';
 
-export const rules: Rule[] = [a01, a02, a03, a04, a05, a06, b01, b02, b03, c01, c02, c03, c04, c05, d01, d02, d03, d04, d05];
+export const rules: Rule[] = [a01, a02, a03, a04, a05, a06, b01, b02, b03, c01, c02, c03, c04, c05, c06, d01, d02, d03, d04, d05];

@@ -153,7 +153,7 @@ The `--reporter=github` flag emits [GitHub Actions annotations](https://docs.git
 
 ## What it checks
 
-Nineteen rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
+Twenty rules across four categories. Each one cites authoritative Next.js / React docs or a CVE - see [`RULES.md`](./RULES.md) for the full per-rule reference, code examples, and source links.
 
 **Boundary integrity (A)**
 - **A1** - Server-only code reachable from the client tree (`@prisma/client`, `node:fs`, secret env vars), traced through barrel files and path aliases.
@@ -174,6 +174,7 @@ Nineteen rules across four categories. Each one cites authoritative Next.js / Re
 - **C3** - Webhook route handlers (`stripe`/`svix`/`@octokit/webhooks`/`@clerk/backend`/etc., or any `route.ts` under a `/webhook(s)/` segment) that read the request body or perform a database write without calling a recognized signature verifier (`stripe.webhooks.constructEvent`, `Webhook.verify`, `verify`, or `verify*Webhook|Signature`-named helpers). Honors `if (process.env.NODE_ENV === 'development')` dev-bypass blocks.
 - **C4** - Route Handlers (`route.ts`) that pass a request-derived URL - `searchParams.get(...)`, `request.url`, `request.nextUrl.*`, or the second-arg `params` for dynamic segments - to `fetch` / `axios` / `got` / `new Request` / `new ImageResponse({ src })` without an allowlist check, a `validate*Url`-style helper, `URL(tainted, '<literal-base>')` parsing, or a hardcoded-host construction site. Catches the SSRF shape behind image-proxy and OG-renderer endpoints.
 - **C5** - Sensitive App Router pages and route handlers (paths under `/admin`, `/dashboard`, `/account`, `/settings`, `/billing`; files in `(authenticated)`/`(protected)`/`(dashboard)` route groups; route handlers that mutate or expose `POST`/`PUT`/`PATCH`/`DELETE`) that are neither covered by an auth-calling `middleware.ts` matcher nor protected by an inline `auth()` call (or one in an ancestor `layout.tsx`). Catches matcher-drift bugs where a route ships publicly because it slipped past `config.matcher`.
+- **C6** - The dispatcher returned by React 19's `useActionState` called outside `startTransition` and not assigned to a `<form action={dispatch}>` / `formAction` prop. The transition is required for `isPending` to track the in-flight state — call it bare from `onClick`/`useEffect` and the spinner/disabled-button UI never reflects the action running. Tracks the dispatcher symbol from the array-binding's second element; conservative on prop pass-through to non-form attributes.
 
 **Rendering correctness (D)**
 - **D1** - Hydration mismatch risks: `Date`, `Math.random()`, browser globals in render scope, locale formatters without explicit locale.
@@ -219,7 +220,7 @@ App Router only - that's where the rules are tuned. Pages Router files in a mixe
 About 3–10 seconds on a 500-file Next.js project on a 2024-era laptop. The first `npx` run also downloads claustra and its TypeScript runtime dependency (a few MB), which takes a few extra seconds. CI runs are network-bound for the install, scan-bound for the rest.
 
 **What about false positives?**
-Each rule has fixture-based tests (366 total across all 19 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
+Each rule has fixture-based tests (376 total across all 20 rules) covering both violations *and* non-violations, so the rule logic is anchored to known-good and known-bad cases. If you find a false positive on real code, please open an issue with a minimal reproduction - that's exactly the feedback loop that improves the rules.
 
 **Do I need to install anything besides `npx claustra`?**
 Just Node.js 20+. `npx` fetches claustra on first run; from then on it's cached.
