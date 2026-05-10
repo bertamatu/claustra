@@ -2,6 +2,12 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **C6 — `useActionState` dispatcher called outside `startTransition`** (severity: medium). Closes the React 19 hook-correctness arc opened by A5 and A6 in v1.5.0. The dispatcher returned by `useActionState` must run inside a transition for `isPending` to update; calling it bare from `onClick`/`useEffect` skips the transition machinery and the spinner/disabled-button UI never reflects the action running. The action still executes — only the loading-state contract is broken, which makes the bug silent in TypeScript and casual smoke testing. Detects the dispatcher symbol from `const [_, dispatch, _] = useActionState(...)` array-binding patterns where the call resolves to an import from `'react'`. Each call site is classified: inside `startTransition(...)` (either the bare React import or the second tuple element of `useTransition()`) → safe; assigned as `<form action={dispatch}>` / `<button formAction={dispatch}>` JSX attribute → safe; pass-through to a child component as a non-form attribute → conservative skip; bare call from any other context → flag. See [RULES.md#c6](./RULES.md#c6--useactionstate-dispatcher-called-outside-starttransition).
+
 ## [1.5.0] — 2026-05-10
 
 Two new React 19 hook correctness rules. Both target silent-but-broken UI patterns that compile cleanly, type-check, and pass casual smoke tests — the kind of bugs that surface only after deployment when a user reports "the spinner never stops" or "the page never loads." 366 tests, no breaking changes.
