@@ -74,10 +74,30 @@ describe('b02 - server data leakage to client', () => {
 
   // ───────────── Spread props ─────────────
 
-  it('flags a spread attribute on a Client Component', () => {
-    const f = inPage().filter((x) => x.message.includes('Spread props'));
-    // One spread on Card, one on ServerCard. Only the Client one is flagged.
+  it('flags a spread of a whole-record DB query result on a Client Component', () => {
+    const f = inPage().filter((x) => x.message.includes('Whole DB record spread'));
+    // <Card {...fullUser} /> is the only spread that hits a Client target and
+    // originates from an unfiltered DB query. <Card {...safeUser} /> uses
+    // `select`, <Card {...spreadable} /> is a static literal, and
+    // <ServerCard {...fullUser} /> targets a Server Component.
     expect(f).toHaveLength(1);
+  });
+
+  it('does NOT flag a spread of a static literal (no server-data origin)', () => {
+    const f = inPage().filter((x) => x.message.includes('Spread'));
+    // The only flagged spread is the DB-record one above; the static literal
+    // and the select-filtered query produce nothing.
+    for (const finding of f) {
+      expect(finding.message).toContain('Whole DB record');
+    }
+  });
+
+  it('does NOT flag the React forwarding-prop pattern `<Primitive {...props} />`', () => {
+    // CardWrapper takes a typed CardProps parameter and spreads it into a
+    // Client Component child. shadcn/ui-style component libraries do this in
+    // every wrapper; the spread source is parameter-derived, not server data.
+    const f = findings.filter((x) => x.file === 'components/forward-wrapper.tsx');
+    expect(f).toHaveLength(0);
   });
 
   // ───────────── Server-target component ─────────────
