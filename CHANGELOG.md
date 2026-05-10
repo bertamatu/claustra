@@ -2,6 +2,12 @@
 
 All notable changes to claustra are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A5 — `useFormStatus` co-located with `<form>` in the same component** (severity: medium). React 19's `useFormStatus` reads form state from a *parent* `<form>`; calling it in the same component that renders the form returns `pending: false` permanently because there is no parent form in scope. Detects calls to a binding produced by `import { useFormStatus } from 'react-dom'` (honoring `as` aliases) co-located with a `<form>` JSX element at the same function scope. Same-scope check does not descend into nested function-likes — a child component defined inline that calls the hook correctly walks up to the outer form. Imports from any other module (user helpers that share the name) are not tracked. See [RULES.md#a5](./RULES.md#a5--useformstatus-co-located-with-form-in-the-same-component).
+
 ## [1.4.0] — 2026-05-10
 
 False-positive cleanup on real Next.js App Router codebases. No new rules — four existing rules' boundary handling, scope filtering, and identifier resolution corrected so they only fire where they should. Driven by scans of next-learn's `dashboard/final-example` and Vercel's `ai-chatbot`, where claustra was producing significant noise on patterns that are not actual bugs.
