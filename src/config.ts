@@ -11,6 +11,7 @@ const ConfigSchema = z.object({
       'a02-rsc-pattern-misuse': 'error',
       'a03-env-public-secret': 'error',
       'a04-unawaited-params': 'error',
+      'a05-useformstatus-colocation': 'error',
       'b01-non-serializable-props': 'error',
       'b03-browser-storage': 'error',
       'b02-server-data-leakage': 'error',
